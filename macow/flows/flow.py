@@ -15,7 +15,7 @@ class Flow(nn.Module):
         super(Flow, self).__init__()
         self.inverse = inverse
 
-    def forward(self, *input) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, *inputs, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -27,7 +27,7 @@ class Flow(nn.Module):
         """
         raise NotImplementedError
 
-    def backward(self, *input) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, *inputs, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
