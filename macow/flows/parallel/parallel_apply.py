@@ -41,7 +41,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
     results = {}
     grad_enabled = torch.is_grad_enabled()
 
-    def _worker(i, flow, input, kwargs, device=None, backward=False):
+    def _worker(i, flow, input, kwargs, device=None, back=False):
         torch.set_grad_enabled(grad_enabled)
         if device is None:
             device = get_a_var(input).get_device()
@@ -50,7 +50,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
                 # this also avoids accidental slicing of `input` if it is a Tensor
                 if not isinstance(input, (list, tuple)):
                     input = (input,)
-                output = flow.backward(*input, **kwargs) if backward else flow.forward(*input, **kwargs)
+                output = flow.backward(*input, **kwargs) if back else flow.forward(*input, **kwargs)
             with lock:
                 results[i] = output
         except Exception as e:
@@ -68,7 +68,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
         for thread in threads:
             thread.join()
     else:
-        _worker(0, flows[0], inputs[0], kwargs_tup[0], devices[0])
+        _worker(0, flows[0], inputs[0], kwargs_tup[0], devices[0], backward)
 
     outputs = []
     for i in range(len(inputs)):
