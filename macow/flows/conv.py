@@ -147,6 +147,42 @@ class MaskedConvFlow(Flow):
         logdet = logdet.log().sum() * H * W
         return out, logdet
 
+    def backward_A(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+        kH, kW = self.kernel_size
+        cH = kH // 2
+        cW = kW // 2
+        out = input.new_zeros(input.size())
+        for i in range(H):
+            si = max(0, i - cH)
+            for j in range(W):
+                sj = max(0, j - cW)
+                tj = min(W, j + cW + 1)
+                input_curr = input[:, :, si:i+1, sj:tj]
+                out_curr = out[:, :, si:i+1, sj:tj]
+                # [batch, channels, cH, cW]
+                tmp, _ = self.forward(out_curr)
+                new_out = (input_curr - tmp).div(c_weight)
+                out[:, :, i, j] = new_out[:, :, -1, j - sj]
+        return out
+
+    def backward_B(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+        kH, kW = self.kernel_size
+        cH = kH // 2
+        cW = kW // 2
+        out = input.new_zeros(input.size())
+        for i in reversed(range(H)):
+            si = min(H, i + cH + 1)
+            for j in reversed(range(W)):
+                sj = max(0, j - cW)
+                tj = min(W, j + cW + 1)
+                input_curr = input[:, :, i:si, sj:tj]
+                out_curr = out[:, :, i:si, sj:tj]
+                # [batch, channels, cH, cW]
+                tmp, _ = self.forward(out_curr)
+                new_out = (input_curr - tmp).div(c_weight)
+                out[:, :, i, j] = new_out[:, :, 0, j - sj]
+        return out
+
     @overrides
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -170,20 +206,12 @@ class MaskedConvFlow(Flow):
         c_weight = self.weight[:, 0, 0, cH, cW]
         logdet = c_weight.log().sum() * H * W * -1.0
 
-        out = input.new_zeros(input.size())
         # [channels, 1, 1]
         c_weight = c_weight.unsqueeze(1).unsqueeze(1)
-        for i in range(H):
-            si = max(0, i - cH)
-            for j in range(W):
-                sj = max(0, j - cW)
-                tj = min(W, j + cW + 1)
-                input_curr = input[:, :, si:i+1, sj:tj]
-                out_curr = out[:, :, si:i+1, sj:tj]
-                # [batch, channels, cH, cW]
-                tmp, _ = self.forward(out_curr)
-                new_out = (input_curr - tmp).div(c_weight)
-                out[:, :, i, j] = new_out[:, :, -1, j - sj]
+        if self.mask_type == 'A':
+            out = self.backward_A(input, H, W, c_weight, h=h)
+        else:
+            out = self.backward_B(input, H, W, c_weight, h=h)
         return out, logdet
 
     @overrides

@@ -10,7 +10,7 @@ from macow.flows.flow import Flow
 
 
 class LeakyReLUFlow(Flow):
-    def __init__(self, negative_slope=1e-1, inverse=False):
+    def __init__(self, negative_slope=0.1, inverse=False):
         super(LeakyReLUFlow, self).__init__(inverse)
         self.negative_slope = negative_slope
 

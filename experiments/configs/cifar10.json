@@ -1,0 +1,11 @@
+{
+  "type": "macow",
+  "num_blocks": 8,
+  "in_channels": 3,
+  "kernel_size": 3,
+  "activation": {
+    "type": "leaky_relu",
+    "negative_slope": 0.1
+  },
+  "inverse": true
+}
