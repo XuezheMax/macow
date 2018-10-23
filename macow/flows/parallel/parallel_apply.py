@@ -59,7 +59,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
 
     if len(flows) > 1:
         threads = [threading.Thread(target=_worker,
-                                    args=(i, flow, input, kwargs, device))
+                                    args=(i, flow, input, kwargs, device, backward))
                    for i, (flow, input, kwargs, device) in
                    enumerate(zip(flows, inputs, kwargs_tup, devices))]
 
