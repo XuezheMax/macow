@@ -9,9 +9,76 @@ import torch.nn.functional as F
 from macow.flows.flow import Flow
 
 
+class PowshrinkFlow(Flow):
+    def __init__(self, exponent=2.0, inverse=False):
+        super(PowshrinkFlow, self).__init__(inverse)
+        assert exponent >= 1.0, 'exponent should be greater or equal to 1.0'
+        self.exponent=exponent
+
+    @overrides
+    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+            *h:
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        sign = input.sign()
+        input = input * sign
+        mask = input.lt(1.0).type_as(input)
+        out = input * (1.0 - mask) + input.pow(self.exponent) * mask
+        out = out * sign
+        # [batch]
+        logdet = ((input + 1e-8).log().mul(self.exponent - 1) + math.log(self.exponent)).mul(mask).view(input.size(0), -1).sum(dim=1)
+        return out, logdet
+
+    @overrides
+    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+            *h:
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        sign = input.sign()
+        input = input * sign
+        mask = input.lt(1.0).type_as(input)
+        out = input * (1.0 - mask) + input.pow(1. / self.exponent) * mask
+        out = out * sign
+        # [batch]
+        logdet = ((input + 1e-8).log().mul(1.0 / self.exponent - 1) - math.log(self.exponent)).mul(mask).view(out.size(0), -1).sum(dim=1)
+        return out, logdet
+
+    @overrides
+    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            return self.forward(data)
+
+    @overrides
+    def extra_repr(self):
+        return 'inverse={}'.format(self.inverse)
+
+    @classmethod
+    def from_params(cls, params: Dict) -> "PowshrinkFlow":
+        return PowshrinkFlow(**params)
+
+
 class LeakyReLUFlow(Flow):
     def __init__(self, negative_slope=0.1, inverse=False):
         super(LeakyReLUFlow, self).__init__(inverse)
+        assert negative_slope > 0.0, 'negative slope should be positive'
         self.negative_slope = negative_slope
 
     @overrides
@@ -133,5 +200,6 @@ class ELUFlow(Flow):
         return ELUFlow(**params)
 
 
+PowshrinkFlow.register('power_shrink')
 LeakyReLUFlow.register('leaky_relu')
 ELUFlow.register('elu')
