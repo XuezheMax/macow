@@ -1,11 +1,10 @@
 __author__ = 'max'
 
+import warnings
 from overrides import overrides
 from typing import Dict, Tuple
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from macow.flows.flow import Flow
 from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
@@ -22,6 +21,9 @@ class MaCowBlock(Flow):
         self.conv2 = MaskedConvFlow(in_channels, kernel_size, mask_type='B', inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
+        if activation.inverse != inverse:
+            activation.inverse = inverse
+            warnings.warn('activation inverse does not match MaCow inverse')
         self.activation = activation
 
     @overrides

@@ -1,12 +1,8 @@
 __author__ = 'max'
 
-import operator
-import warnings
 from overrides import overrides
-from typing import Dict, Tuple
-import numpy as np
+from typing import Tuple
 import torch
-import torch.nn as nn
 from torch.nn.parallel.replicate import replicate
 from macow.flows.parallel.parallel_apply import parallel_apply
 from torch.nn.parallel.scatter_gather import scatter_kwargs, gather
