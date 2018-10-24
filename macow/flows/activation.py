@@ -31,7 +31,7 @@ class LeakyReLUFlow(Flow):
         out = F.leaky_relu(input, self.negative_slope, False)
         log_slope = math.log(self.negative_slope)
         # [batch]
-        logdet = input.view(input.size(0), -1).lt(0.0).float().sum(dim=1) * log_slope
+        logdet = input.view(input.size(0), -1).lt(0.0).type_as(input).sum(dim=1) * log_slope
         return out, logdet
 
     @overrides
@@ -52,7 +52,7 @@ class LeakyReLUFlow(Flow):
         out = F.leaky_relu(input, negative_slope, False)
         log_slope = math.log(negative_slope)
         # [batch]
-        logdet = input.view(input.size(0), -1).lt(0.0).float().sum(dim=1) * log_slope
+        logdet = input.view(input.size(0), -1).lt(0.0).type_as(input).sum(dim=1) * log_slope
         return out, logdet
 
     @overrides
