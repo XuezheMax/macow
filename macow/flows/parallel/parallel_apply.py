@@ -28,11 +28,6 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
     to a module, or a collection of positional arguments.
     """
     assert len(flows) == len(inputs)
-    print('*************************')
-    print(inputs)
-    print(len(flows))
-    print('*************************')
-
     if kwargs_tup is not None:
         assert len(flows) == len(kwargs_tup)
     else:
@@ -63,6 +58,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
                 results[i] = e
 
     if len(flows) > 1:
+        print('aaaa')
         threads = [threading.Thread(target=_worker,
                                     args=(i, flow, input, kwargs, device, backward))
                    for i, (flow, input, kwargs, device) in
@@ -73,6 +69,7 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
         for thread in threads:
             thread.join()
     else:
+        print('bbbb')
         _worker(0, flows[0], inputs[0], kwargs_tup[0], devices[0], backward)
 
     outputs = []
