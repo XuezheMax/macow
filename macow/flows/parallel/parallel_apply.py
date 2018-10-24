@@ -28,6 +28,11 @@ def parallel_apply(flows, inputs, kwargs_tup=None, devices=None, backward=False)
     to a module, or a collection of positional arguments.
     """
     assert len(flows) == len(inputs)
+    print('*************************')
+    print(inputs)
+    print(len(flows))
+    print('*************************')
+
     if kwargs_tup is not None:
         assert len(flows) == len(kwargs_tup)
     else:
