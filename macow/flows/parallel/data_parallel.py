@@ -63,6 +63,10 @@ class DataParallelFlow(Flow):
         outputs = self.parallel_apply(replicas, inputs, kwargs, backward=True)
         return self.gather(outputs, self.output_device)
 
+    @overrides
+    def init(self, *input, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.flow.init(*input, **kwargs)
+
     def replicate(self, flow, device_ids):
         return replicate(flow, device_ids)
 
