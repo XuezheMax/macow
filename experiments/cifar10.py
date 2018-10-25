@@ -103,7 +103,7 @@ eps = 1e-8
 if opt == 'adam':
     lr = 1e-3
 elif opt == 'adamax':
-    lr = 2e-3
+    lr = 1e-3
 else:
     raise ValueError('unknown optimization method: %s' % opt)
 
@@ -170,7 +170,7 @@ def eval(eval_data, eval_index):
         data = preprocess(data, n_bits, False).to(device)
 
         batch_size = len(data)
-        log_probs = fgen.log_probability(data)
+        log_probs = fgen_shadow.log_probability(data)
 
         num_insts += batch_size
         test_nll -= log_probs.sum()
@@ -188,7 +188,7 @@ best_bpd = 1e12
 for epoch in range(1, args.epochs + 1):
     train(epoch)
     lr = scheduler.get_lr()[0]
-    print('----------------------------------------------------------------------------------------------------------------------------')
+    print('-' * 50)
     with torch.no_grad():
         nll, bits_per_pixel = eval(train_data, val_index)
     if nll < best_nll:
@@ -202,7 +202,7 @@ for epoch in range(1, args.epochs + 1):
         patient += 1
 
     print('Best: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
-    print('============================================================================================================================')
+    print('=' * 50)
 
     if lr < lr_min:
         break
@@ -213,4 +213,4 @@ with torch.no_grad():
     eval(train_data, val_index)
     print('Final test:')
     eval(test_data, test_index)
-    print('----------------------------------------------------------------------------------------------------------------------------')
+    print('-' * 5)
