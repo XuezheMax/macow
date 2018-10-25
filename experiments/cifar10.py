@@ -28,6 +28,7 @@ parser.add_argument('--seed', type=int, default=524287, metavar='S', help='rando
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
 
@@ -83,8 +84,8 @@ fgen.eval()
 fgen.init(init_data, init_scale=1.0)
 # create shadow mae for ema
 params = json.load(open(args.config, 'r'))
-fgen_shadow = FlowGenModel.from_params(params).to(device)
-exponentialMovingAverage(fgen, fgen_shadow, polyak_decay, init=True)
+# fgen_shadow = FlowGenModel.from_params(params).to(device)
+# exponentialMovingAverage(fgen, fgen_shadow, polyak_decay, init=True)
 print(args)
 
 def get_optimizer(learning_rate, parameters):
@@ -99,13 +100,7 @@ def get_optimizer(learning_rate, parameters):
 opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
-
-if opt == 'adam':
-    lr = 1e-3
-elif opt == 'adamax':
-    lr = 1e-3
-else:
-    raise ValueError('unknown optimization method: %s' % opt)
+lr = args.lr
 
 optimizer = get_optimizer(lr, fgen.parameters())
 step_decay = 0.999995
@@ -135,7 +130,7 @@ def train(epoch):
         clip_grad_norm_(fgen.parameters(), 5.0)
         optimizer.step()
         scheduler.step()
-        exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
+        # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
 
         with torch.no_grad():
             num_insts += batch_size
@@ -163,22 +158,22 @@ def train(epoch):
 
 
 def eval(eval_data, eval_index):
-    fgen_shadow.eval()
+    fgen.eval()
     test_nll = 0
     num_insts = 0
     for i, (data, _) in enumerate(iterate_minibatches(eval_data, eval_index, 100, False)):
-        data = preprocess(data, n_bits, False).to(device)
+        data = preprocess(data, n_bits, True).to(device)
 
         batch_size = len(data)
-        log_probs = fgen_shadow.log_probability(data)
+        log_probs = fgen.log_probability(data)
 
         num_insts += batch_size
-        test_nll -= log_probs.sum()
+        test_nll -= log_probs.sum().item()
 
     test_nll = test_nll / num_insts - np.log(n_bins / 2.) * nx
     bits_per_pixel = test_nll / (nx * np.log(2.0))
 
-    print('NLL : {:.2f}, BPD: {:.2f}'.format(test_nll, bits_per_pixel))
+    print('NLL: {:.2f}, BPD: {:.2f}'.format(test_nll, bits_per_pixel))
     return test_nll, bits_per_pixel
 
 
@@ -190,10 +185,19 @@ for epoch in range(1, args.epochs + 1):
     lr = scheduler.get_lr()[0]
     print('-' * 50)
     with torch.no_grad():
-        nll, bits_per_pixel = eval(train_data, val_index)
+        test_itr = 5
+        nlls = []
+        bits_per_pixels = []
+        for _ in range(test_itr):
+            nll, bits_per_pixel = eval(train_data, val_index)
+            nlls.append(nll)
+            bits_per_pixels.append(bits_per_pixel)
+        nll = sum(nlls) / test_itr
+        bits_per_pixel = sum(bits_per_pixels) / test_itr
+        print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
     if nll < best_nll:
         patient = 0
-        torch.save(fgen_shadow.state_dict(), model_name)
+        torch.save(fgen.state_dict(), model_name)
 
         best_epoch = epoch
         best_nll = nll
@@ -201,13 +205,13 @@ for epoch in range(1, args.epochs + 1):
     else:
         patient += 1
 
-    print('Best: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
+    print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
     if lr < lr_min:
         break
 
-fgen_shadow.load_state_dict(torch.load(model_name))
+fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():
     print('Final val:')
     eval(train_data, val_index)

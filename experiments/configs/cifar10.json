@@ -7,7 +7,7 @@
     "kernel_size": 3,
     "activation": {
       "type": "leaky_relu",
-      "negative_slope": 0.1,
+      "negative_slope": 0.8,
       "inverse": true
     },
     "inverse": true
