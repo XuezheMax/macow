@@ -26,7 +26,7 @@ def squeeze2d(x, factor=2):
     # [batch, channels, height, width] -> [batch, channels, height/factor, factor, width/factor, factor]
     x = x.view(-1, n_channels, height // factor, factor, width // factor, factor)
     # [batch, channels, factor, factor, height/factor, width/factor]
-    x = x.permute(0, 1, 3, 5, 2, 4)
+    x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
     # [batch, channels*factor*factor, height/factor, width/factor]
     x = x.view(-1, n_channels * factor * factor, height // factor, width // factor)
     return x
@@ -41,7 +41,7 @@ def unsqueeze2d(x, factor=2):
     # [batch, channels, height, width] -> [batch, channels/(factor*factor), factor, factor, height, width]
     x = x.view(-1, int(n_channels / factor ** 2), factor, factor, height, width)
     # [batch, channels/(factor*factor), height, factor, width, factor]
-    x = x.permute(0, 1, 4, 2, 5, 3)
+    x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
     # [batch, channels/(factor*factor), height*factor, width*factor]
     x = x.view(-1, int(n_channels / factor ** 2), int(height * factor), int(width * factor))
     return x
