@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from macow.flows.flow import Flow
+from macow.utils import logPlusOne
 
 
 class IdentityFlow(Flow):
@@ -228,7 +229,7 @@ class ELUFlow(Flow):
 
         """
         mask = input.lt(0.0).float()
-        out = input * (1.0 - mask) + mask * (input.div(self.alpha) + 1 + 1e-10).log()
+        out = input * (1.0 - mask) + mask * logPlusOne(input.div(self.alpha))
         # [batch, numel]
         out_flat = out.view(input.size(0), -1)
         logdet = out_flat + math.log(self.alpha)

@@ -57,3 +57,18 @@ def exponentialMovingAverage(original, shadow, decay_rate, init=False):
             shadow_param.data.copy_(param.data)
         else:
             shadow_param.data.add_((1 - decay_rate) * (param.data - shadow_param.data))
+
+
+def logPlusOne(x):
+    """
+    compute log(x + 1) for small x
+    Args:
+        x: Tensor
+
+    Returns: Tensor
+        log(x+1)
+
+    """
+    eps=1e-4
+    mask = x.abs().le(eps).type_as(x)
+    return x.mul(x.mul(-0.5) + 1.0) * mask + (x + 1.0).log() * (1.0 - mask)
