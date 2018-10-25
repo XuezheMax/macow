@@ -84,7 +84,7 @@ def load_cifar10():
                                  transform=transforms.Compose([
                                      transforms.ToTensor()
                                  ]))
-    return train_data, test_data, 2000
+    return train_data, test_data
 
 
 def get_batch(data, indices):

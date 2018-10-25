@@ -57,18 +57,18 @@ result_path = os.path.join(model_path, 'images')
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
-train_data, test_data, n_val = load_datasets(dataset)
+train_data, test_data = load_datasets(dataset)
 
 train_index = np.arange(len(train_data))
 np.random.shuffle(train_index)
-val_index = train_index[-n_val:]
-train_index = train_index[:-n_val]
+# val_index = train_index[-n_val:]
+# train_index = train_index[:-n_val]
 
 test_index = np.arange(len(test_data))
 np.random.shuffle(test_index)
 
 print(len(train_index))
-print(len(val_index))
+# print(len(val_index))
 print(len(test_index))
 
 polyak_decay = args.polyak
@@ -76,10 +76,10 @@ params = json.load(open(args.config, 'r'))
 json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
 fgen = FlowGenModel.from_params(params).to(device)
 # initialize
-init_batch_size = 512
+init_batch_size = 2048
 init_index = np.random.choice(train_index, init_batch_size, replace=False)
 init_data, _ = get_batch(train_data, init_index)
-init_data = preprocess(init_data, n_bits, False).to(device)
+init_data = preprocess(init_data, n_bits, True).to(device)
 fgen.eval()
 fgen.init(init_data, init_scale=1.0)
 # create shadow mae for ema
@@ -161,7 +161,7 @@ def eval(eval_data, eval_index):
     fgen.eval()
     test_nll = 0
     num_insts = 0
-    for i, (data, _) in enumerate(iterate_minibatches(eval_data, eval_index, 100, False)):
+    for i, (data, _) in enumerate(iterate_minibatches(eval_data, eval_index, 500, False)):
         data = preprocess(data, n_bits, True).to(device)
 
         batch_size = len(data)
@@ -189,7 +189,7 @@ for epoch in range(1, args.epochs + 1):
         nlls = []
         bits_per_pixels = []
         for _ in range(test_itr):
-            nll, bits_per_pixel = eval(train_data, val_index)
+            nll, bits_per_pixel = eval(test_data, test_index)
             nlls.append(nll)
             bits_per_pixels.append(bits_per_pixel)
         nll = sum(nlls) / test_itr
@@ -213,8 +213,6 @@ for epoch in range(1, args.epochs + 1):
 
 fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():
-    print('Final val:')
-    eval(train_data, val_index)
     print('Final test:')
     eval(test_data, test_index)
     print('-' * 5)
