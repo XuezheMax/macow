@@ -126,7 +126,7 @@ def preprocess(img, n_bits, noisy):
 
     # add noise
     if noisy:
-        img = img + img.new_empty(img.size()).uniform(-1. / n_bins, 1. / n_bins)
+        img = img + img.new_empty(img.size()).uniform_(-1. / n_bins, 1. / n_bins)
     return img
 
 
