@@ -141,7 +141,7 @@ def train(epoch):
             sys.stdout.write("\b" * num_back)
             sys.stdout.write(" " * num_back)
             sys.stdout.write("\b" * num_back)
-            train_nll = nll / num_insts - np.log(n_bins / 2.) * nx
+            train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.2f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * num_insts / len(train_index), train_nll, bits_per_pixel)
@@ -152,7 +152,7 @@ def train(epoch):
     sys.stdout.write("\b" * num_back)
     sys.stdout.write(" " * num_back)
     sys.stdout.write("\b" * num_back)
-    train_nll = nll / num_insts - np.log(n_bins / 2.) * nx
+    train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
     bits_per_pixel = train_nll / (nx * np.log(2.0))
     print('Average NLL: {:.2f}, BPD: {:.2f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
 
@@ -170,7 +170,7 @@ def eval(eval_data, eval_index):
         num_insts += batch_size
         test_nll -= log_probs.sum().item()
 
-    test_nll = test_nll / num_insts - np.log(n_bins / 2.) * nx
+    test_nll = test_nll / num_insts + np.log(n_bins / 2.) * nx
     bits_per_pixel = test_nll / (nx * np.log(2.0))
 
     print('NLL: {:.2f}, BPD: {:.2f}'.format(test_nll, bits_per_pixel))
