@@ -1,12 +1,16 @@
 {
-  "type": "macow",
-  "num_blocks": 8,
-  "in_channels": 3,
-  "kernel_size": 3,
-  "activation": {
-    "type": "leaky_relu",
-    "negative_slope": 0.1,
+  "flow": {
+    "type": "macow",
+    "levels": 3,
+    "num_units": 8,
+    "in_channels": 3,
+    "kernel_size": 3,
+    "activation": {
+      "type": "leaky_relu",
+      "negative_slope": 0.1,
+      "inverse": true
+    },
     "inverse": true
   },
-  "inverse": true
+  "ngpu": 1
 }

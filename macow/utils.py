@@ -45,3 +45,15 @@ def unsqueeze2d(x, factor=2):
     # [batch, channels/(factor*factor), height*factor, width*factor]
     x = x.view(-1, int(n_channels / factor ** 2), int(height * factor), int(width * factor))
     return x
+
+
+def exponentialMovingAverage(original, shadow, decay_rate, init=False):
+    params = dict()
+    for name, param in shadow.named_parameters():
+        params[name] = param
+    for name, param in original.named_parameters():
+        shadow_param = params[name]
+        if init:
+            shadow_param.data.copy_(param.data)
+        else:
+            shadow_param.data.add_((1 - decay_rate) * (param.data - shadow_param.data))

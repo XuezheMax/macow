@@ -9,6 +9,56 @@ import torch.nn.functional as F
 from macow.flows.flow import Flow
 
 
+class IdentityFlow(Flow):
+    def __init__(self, inverse=False):
+        super(IdentityFlow, self).__init__(inverse)
+
+    @overrides
+    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+            *h:
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        return input, input.new_zeros(input.size(0))
+
+    @overrides
+    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+            *h:
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        return input, input.new_zeros(input.size(0))
+
+    @overrides
+    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            return self.forward(data)
+
+    @overrides
+    def extra_repr(self):
+        return 'inverse={}'.format(self.inverse)
+
+    @classmethod
+    def from_params(cls, params: Dict) -> "IdentityFlow":
+        return IdentityFlow(**params)
+
+
 class PowshrinkFlow(Flow):
     def __init__(self, exponent=2.0, inverse=False):
         super(PowshrinkFlow, self).__init__(inverse)

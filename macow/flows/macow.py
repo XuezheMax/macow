@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
+from macow.flows.activation import IdentityFlow
 from macow.utils import squeeze2d, unsqueeze2d
 
 
@@ -115,6 +116,7 @@ class MaCow(Flow):
     """
     def __init__(self, levels, num_units, in_channels, kernel_size, activation: Flow, inverse=False):
         super(MaCow, self).__init__(inverse)
+        assert levels > 0
         blocks = []
         self.levels = levels
         for level in range(levels):
@@ -122,6 +124,8 @@ class MaCow(Flow):
             blocks.append(macow_block)
             in_channels = in_channels * 4
         self.blocks = nn.ModuleList(blocks)
+        in_channels = in_channels // 4
+        self.output_unit = MaCowUnit(in_channels, kernel_size, IdentityFlow(inverse), inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -132,6 +136,8 @@ class MaCow(Flow):
                 out = squeeze2d(out, factor=2)
             out, logdet = block.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
+        out, logdet = self.output_unit.forward(out, h=h)
+        logdet_accum = logdet_accum + logdet
         # unsqueeze
         for i in range(self.levels - 1):
             out = unsqueeze2d(out, factor=2)
@@ -139,11 +145,11 @@ class MaCow(Flow):
 
     @overrides
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = input.new_zeros(input.size(0))
         out = input
         # squeeze first
         for i in range(self.levels - 1):
             out = squeeze2d(out, factor=2)
+        out, logdet_accum = self.output_unit.backward(out, h=h)
         for i, block in enumerate(reversed(self.blocks)):
             if i > 0:
                 out = unsqueeze2d(out, factor=2)
@@ -160,6 +166,8 @@ class MaCow(Flow):
                 out = squeeze2d(out, factor=2)
             out, logdet = block.init(out, h=h, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
+        out, logdet = self.output_unit.init(out, h=h, init_scale=init_scale)
+        logdet_accum = logdet_accum + logdet
         # unsqueeze
         for i in range(self.levels - 1):
             out = unsqueeze2d(out, factor=2)
