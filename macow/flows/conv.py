@@ -24,7 +24,6 @@ class Conv1x1Flow(Flow):
 
     def reset_parameters(self):
         nn.init.orthogonal_(self.weight_v)
-        # nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
         _norm = norm(self.weight_v, 0).data + 1e-8
         self.weight_g.data.copy_(_norm.log())
         nn.init.constant_(self.bias, 0.)
@@ -114,8 +113,8 @@ class MaskedConvFlow(Flow):
             assert k % 2 == 1, 'kernel cannot include even number: {}'.format(self.kernel_size)
         self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
 
-        # TODO: use weight normalization.
-        self.weight = Parameter(torch.Tensor(in_channels, 1, 1, *self.kernel_size))
+        self.weight_v = Parameter(torch.Tensor(in_channels, 1, 1, *self.kernel_size))
+        self.weight_g = Parameter(torch.Tensor(in_channels, 1, 1, 1, 1))
         self.bias = Parameter(torch.Tensor(in_channels, 1, 1))
         self.register_buffer('mask', torch.ones(self.kernel_size))
         kH, kW = self.kernel_size
@@ -131,13 +130,21 @@ class MaskedConvFlow(Flow):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.normal_(self.weight, mean=0.0, std=0.05)
-        # nn.init.constant_(self.weight, 0)
+        nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
         with torch.no_grad():
             cH = self.kernel_size[0] // 2
             cW = self.kernel_size[1] // 2
-            self.weight[:, 0, 0, cH, cW].add_(1.0)
+            self.weight_v[:, 0, 0, cH, cW].add_(1.0)
+        self.weight_v.data.mul_(self.mask)
+        _norm = norm(self.weight_v, 0).data + 1e-8
+        self.weight_g.data.copy_(_norm.log())
         nn.init.constant_(self.bias, 0)
+
+    def compute_weight(self) -> torch.Tensor:
+        self.weight_v.data.mul_(self.mask)
+        _norm = norm(self.weight_v, 0) + 1e-8
+        weight = self.weight_v * (self.weight_g.exp() / _norm)
+        return weight
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -157,15 +164,15 @@ class MaskedConvFlow(Flow):
         batch, channels, H, W = input.size()
         # [batch, in_channels, 1, H, W]
         input = input.unsqueeze(2)
-        self.weight.data.mul_(self.mask)
-        outs = [F.conv2d(input[:, i], self.weight[i], padding=self.padding) for i in range(channels)]
+        weight = self.compute_weight()
+        outs = [F.conv2d(input[:, i], weight[i], padding=self.padding) for i in range(channels)]
         # [batch, in_channels, H, W]
         out = torch.cat(outs, dim=1) + self.bias
 
         cH = self.kernel_size[0] // 2
         cW = self.kernel_size[1] // 2
         # [in_channels]
-        logdet = self.weight[:, 0, 0, cH, cW]
+        logdet = weight[:, 0, 0, cH, cW]
         logdet = logdet.log().sum() * H * W
         return out, logdet
 
@@ -225,7 +232,8 @@ class MaskedConvFlow(Flow):
         cW = kW // 2
         batch, channels, H, W = input.size()
 
-        c_weight = self.weight[:, 0, 0, cH, cW]
+        weight = self.compute_weight()
+        c_weight = weight[:, 0, 0, cH, cW]
         logdet = c_weight.log().sum() * H * W * -1.0
 
         # [channels, 1, 1]
@@ -239,6 +247,16 @@ class MaskedConvFlow(Flow):
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
+            # [batch, n_channels, H, W]
+            out, _ = self.forward(data)
+            n_channels = out.size(1)
+            out = out.transpose(0, 1).contiguous().view(n_channels, -1)
+            # [n_channels, 1, 1]
+            mean = out.mean(dim=1).view(n_channels, 1, 1)
+            std = out.std(dim=1).view(n_channels, 1, 1)
+            inv_stdv = init_scale / (std + 1e-6)
+            self.weight_g.add_(inv_stdv.log().view(n_channels, 1, 1, 1, 1))
+            self.bias.add_(-mean).mul_(inv_stdv)
             return self.forward(data)
 
     @overrides
