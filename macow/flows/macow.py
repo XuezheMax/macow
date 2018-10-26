@@ -116,11 +116,11 @@ class MaCow(Flow):
     """
     def __init__(self, levels, num_units, in_channels, kernel_size, activation: Flow, inverse=False):
         super(MaCow, self).__init__(inverse)
-        assert levels > 0
+        assert levels == len(num_units)
         blocks = []
         self.levels = levels
         for level in range(levels):
-            macow_block = MaCowBlock(num_units, in_channels, kernel_size, activation, inverse=inverse)
+            macow_block = MaCowBlock(num_units[level], in_channels, kernel_size, activation, inverse=inverse)
             blocks.append(macow_block)
             in_channels = in_channels * 4
         self.blocks = nn.ModuleList(blocks)

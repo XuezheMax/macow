@@ -2,12 +2,11 @@
   "flow": {
     "type": "macow",
     "levels": 3,
-    "num_units": 16,
+    "num_units": [32, 32, 16],
     "in_channels": 3,
     "kernel_size": 3,
     "activation": {
-      "type": "leaky_relu",
-      "negative_slope": 0.8,
+      "type": "elu",
       "inverse": true
     },
     "inverse": true
