@@ -122,9 +122,9 @@ class MaCow(Flow):
         for level in range(levels):
             macow_block = MaCowBlock(num_units[level], in_channels, kernel_size, activation, inverse=inverse)
             blocks.append(macow_block)
-            in_channels = in_channels * 4
+            in_channels = in_channels * 2
         self.blocks = nn.ModuleList(blocks)
-        in_channels = in_channels // 4
+        in_channels = in_channels // 2
         self.output_unit = MaCowUnit(in_channels, kernel_size, IdentityFlow(inverse), inverse=inverse)
 
     @overrides
@@ -134,10 +134,19 @@ class MaCow(Flow):
         for i, block in enumerate(self.blocks):
             if i > 0:
                 out = squeeze2d(out, factor=2)
+            factor = 2 ** i
             out, logdet = block.forward(out, h=h)
+            # [factor * batch] -> [batch]
+            logdet = sum(logdet.chunk(factor, dim=0))
             logdet_accum = logdet_accum + logdet
+
+        # output unit
+        factor = 2 ** (self.levels - 1)
         out, logdet = self.output_unit.forward(out, h=h)
+        # [factor * batch] -> [batch]
+        logdet = sum(logdet.chunk(factor, dim=0))
         logdet_accum = logdet_accum + logdet
+
         # unsqueeze
         for i in range(self.levels - 1):
             out = unsqueeze2d(out, factor=2)
@@ -149,11 +158,20 @@ class MaCow(Flow):
         # squeeze first
         for i in range(self.levels - 1):
             out = squeeze2d(out, factor=2)
+
+        # output unit
+        factor = 2 ** (self.levels - 1)
         out, logdet_accum = self.output_unit.backward(out, h=h)
+        # [factor * batch] -> [batch]
+        logdet_accum = sum(logdet_accum.chunk(factor, dim=0))
+
         for i, block in enumerate(reversed(self.blocks)):
             if i > 0:
                 out = unsqueeze2d(out, factor=2)
+            factor = 2 ** (self.levels - i - 1)
             out, logdet = block.backward(out, h=h)
+            # [factor * batch] -> [batch]
+            logdet = sum(logdet.chunk(factor, dim=0))
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
@@ -164,10 +182,19 @@ class MaCow(Flow):
         for i, block in enumerate(self.blocks):
             if i > 0:
                 out = squeeze2d(out, factor=2)
+            factor = 2 ** i
             out, logdet = block.init(out, h=h, init_scale=init_scale)
+            # [factor * batch] -> [batch]
+            logdet = sum(logdet.chunk(factor, dim=0))
             logdet_accum = logdet_accum + logdet
+
+        # output unit
+        factor = 2 ** (self.levels - 1)
         out, logdet = self.output_unit.init(out, h=h, init_scale=init_scale)
+        # [factor * batch] -> [batch]
+        logdet = sum(logdet.chunk(factor, dim=0))
         logdet_accum = logdet_accum + logdet
+
         # unsqueeze
         for i in range(self.levels - 1):
             out = unsqueeze2d(out, factor=2)
