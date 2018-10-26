@@ -215,8 +215,8 @@ for epoch in range(1, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    if lr < lr_min:
-        break
+    # if lr < lr_min:
+    #     break
 
 fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():
