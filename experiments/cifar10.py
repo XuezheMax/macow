@@ -185,10 +185,10 @@ best_epoch = 0
 best_nll = 1e12
 best_bpd = 1e12
 for epoch in range(1, args.epochs + 1):
+    lr = scheduler.get_lr()[0]
     train(epoch)
     if epoch >= warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
-    lr = scheduler.get_lr()[0]
     print('-' * 50)
     if epoch < 11 or (epoch < 50 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
         with torch.no_grad():
