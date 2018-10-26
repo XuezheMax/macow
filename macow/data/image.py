@@ -74,10 +74,13 @@ def load_lsun(data_path, category):
 
 
 def load_cifar10():
-    # TODO add data augmentation method
+    imageSize = 32
     train_data = datasets.CIFAR10('data/cifar10', train=True,
                                   download=True,
                                   transform=transforms.Compose([
+                                      transforms.Pad(4, padding_mode='reflect'),
+                                      transforms.RandomCrop(imageSize),
+                                      transforms.RandomHorizontalFlip(0.5),
                                       transforms.ToTensor()
                                   ]))
     test_data = datasets.CIFAR10('data/cifar10', train=False,
