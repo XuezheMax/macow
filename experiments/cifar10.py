@@ -24,6 +24,8 @@ parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 64)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train (default: 10)')
+parser.add_argument('--warmup_epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
+parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
@@ -97,19 +99,6 @@ def get_optimizer(learning_rate, parameters):
         raise ValueError('unknown optimization method: %s' % opt)
 
 
-opt = args.opt
-betas = (0.9, polyak_decay)
-eps = 1e-8
-lr = args.lr
-
-optimizer = get_optimizer(lr, fgen.parameters())
-step_decay = 0.999995
-scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay)
-lr_min = lr / 20
-
-patient = 0
-
-
 def train(epoch):
     print('Epoch: %d (lr=%.6f (%s), patient=%d' % (epoch, lr, opt, patient))
     fgen.train()
@@ -177,33 +166,51 @@ def eval(eval_data, eval_index):
     return test_nll, bits_per_pixel
 
 
+opt = args.opt
+betas = (0.9, polyak_decay)
+eps = 1e-8
+lr = args.lr
+warmups = args.warmup_epochs
+
+optimizer = get_optimizer(lr, fgen.parameters())
+lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
+scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
+scheduler.step()
+
+step_decay = 0.999995
+lr_min = lr / 20
+patient = 0
+
 best_epoch = 0
 best_nll = 1e12
 best_bpd = 1e12
 for epoch in range(1, args.epochs + 1):
     train(epoch)
+    if epoch >= warmups:
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
     lr = scheduler.get_lr()[0]
     print('-' * 50)
-    with torch.no_grad():
-        test_itr = 5
-        nlls = []
-        bits_per_pixels = []
-        for _ in range(test_itr):
-            nll, bits_per_pixel = eval(test_data, test_index)
-            nlls.append(nll)
-            bits_per_pixels.append(bits_per_pixel)
-        nll = sum(nlls) / test_itr
-        bits_per_pixel = sum(bits_per_pixels) / test_itr
-        print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
-    if nll < best_nll:
-        patient = 0
-        torch.save(fgen.state_dict(), model_name)
+    if epoch < 11 or (epoch < 50 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
+        with torch.no_grad():
+            test_itr = 5
+            nlls = []
+            bits_per_pixels = []
+            for _ in range(test_itr):
+                nll, bits_per_pixel = eval(test_data, test_index)
+                nlls.append(nll)
+                bits_per_pixels.append(bits_per_pixel)
+            nll = sum(nlls) / test_itr
+            bits_per_pixel = sum(bits_per_pixels) / test_itr
+            print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
+        if nll < best_nll:
+            patient = 0
+            torch.save(fgen.state_dict(), model_name)
 
-        best_epoch = epoch
-        best_nll = nll
-        best_bpd = bits_per_pixel
-    else:
-        patient += 1
+            best_epoch = epoch
+            best_nll = nll
+            best_bpd = bits_per_pixel
+        else:
+            patient += 1
 
     print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
