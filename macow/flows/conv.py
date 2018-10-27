@@ -131,10 +131,10 @@ class MaskedConvFlow(Flow):
 
     def reset_parameters(self):
         nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
-        with torch.no_grad():
-            cH = self.kernel_size[0] // 2
-            cW = self.kernel_size[1] // 2
-            self.weight_v[:, 0, 0, cH, cW].add_(1.0)
+        # with torch.no_grad():
+        #     cH = self.kernel_size[0] // 2
+        #     cW = self.kernel_size[1] // 2
+        #     self.weight_v[:, 0, 0, cH, cW].add_(1.0)
         self.weight_v.data.mul_(self.mask)
         _norm = norm(self.weight_v, 0).data + 1e-8
         self.weight_g.data.copy_(_norm.log())
