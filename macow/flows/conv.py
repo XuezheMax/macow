@@ -24,6 +24,7 @@ class Conv1x1Flow(Flow):
 
     def reset_parameters(self):
         nn.init.orthogonal_(self.weight_v)
+        # nn.init.normal_(self.weight_v, mean=0, std=0.05)
         _norm = norm(self.weight_v, 0).data + 1e-8
         self.weight_g.data.copy_(_norm.log())
         nn.init.constant_(self.bias, 0.)
@@ -51,7 +52,8 @@ class Conv1x1Flow(Flow):
         batch, channels, H, W = input.size()
         weight = self.compute_weight()
         out = F.conv2d(input, weight.view(self.in_channels, self.in_channels, 1, 1), self.bias)
-        _, logdet = torch.slogdet(weight)
+        out = out + input
+        _, logdet = torch.slogdet(weight + torch.eye(channels).type_as(out))
         return out, logdet * H * W
 
     @overrides
@@ -70,7 +72,7 @@ class Conv1x1Flow(Flow):
 
         """
         batch, channels, H, W = input.size()
-        weight = self.compute_weight()
+        weight = self.compute_weight() + torch.eye(channels).type_as(input)
         out = F.conv2d(input - self.bias.view(self.in_channels, 1, 1), weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
         _, logdet = torch.slogdet(weight)
         return out, logdet * H * W * -1.0
@@ -80,6 +82,7 @@ class Conv1x1Flow(Flow):
         with torch.no_grad():
             # [batch, n_channels, H, W]
             out, _ = self.forward(data)
+            out = out - data
             out = out.transpose(0, 1).contiguous().view(self.in_channels, -1)
             # [n_channels]
             mean = out.mean(dim=1)
@@ -131,10 +134,10 @@ class MaskedConvFlow(Flow):
 
     def reset_parameters(self):
         nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
-        # with torch.no_grad():
-        #     cH = self.kernel_size[0] // 2
-        #     cW = self.kernel_size[1] // 2
-        #     self.weight_v[:, 0, 0, cH, cW].add_(1.0)
+        with torch.no_grad():
+            cH = self.kernel_size[0] // 2
+            cW = self.kernel_size[1] // 2
+            self.weight_v[:, 0, 0, cH, cW].add_(1.0)
         self.weight_v.data.mul_(self.mask)
         _norm = norm(self.weight_v, 0).data + 1e-8
         self.weight_g.data.copy_(_norm.log())
