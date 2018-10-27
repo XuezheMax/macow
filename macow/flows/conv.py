@@ -163,17 +163,18 @@ class MaskedConvFlow(Flow):
         """
         batch, channels, H, W = input.size()
         # [batch, in_channels, 1, H, W]
-        input = input.unsqueeze(2)
+        input_reshape = input.unsqueeze(2)
         weight = self.compute_weight()
-        outs = [F.conv2d(input[:, i], weight[i], padding=self.padding) for i in range(channels)]
+        outs = [F.conv2d(input_reshape[:, i], weight[i], padding=self.padding) for i in range(channels)]
         # [batch, in_channels, H, W]
         out = torch.cat(outs, dim=1) + self.bias
+        out = out + input
 
         cH = self.kernel_size[0] // 2
         cW = self.kernel_size[1] // 2
         # [in_channels]
-        logdet = weight[:, 0, 0, cH, cW]
-        logdet = logdet.log().sum() * H * W
+        logdet = weight[:, 0, 0, cH, cW] + 1.0
+        logdet = logdet.abs().log().sum() * H * W
         return out, logdet
 
     def backward_A(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
@@ -233,8 +234,8 @@ class MaskedConvFlow(Flow):
         batch, channels, H, W = input.size()
 
         weight = self.compute_weight()
-        c_weight = weight[:, 0, 0, cH, cW]
-        logdet = c_weight.log().sum() * H * W * -1.0
+        c_weight = weight[:, 0, 0, cH, cW] + 1.0
+        logdet = c_weight.abs().log().sum() * H * W * -1.0
 
         # [channels, 1, 1]
         c_weight = c_weight.unsqueeze(1).unsqueeze(1)
@@ -249,6 +250,7 @@ class MaskedConvFlow(Flow):
         with torch.no_grad():
             # [batch, n_channels, H, W]
             out, _ = self.forward(data)
+            out = out - data
             n_channels = out.size(1)
             out = out.transpose(0, 1).contiguous().view(n_channels, -1)
             # [n_channels, 1, 1]
