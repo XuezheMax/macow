@@ -188,7 +188,7 @@ for epoch in range(1, args.epochs + 1):
     lr = scheduler.get_lr()[0]
     train(epoch)
     print('-' * 50)
-    if epoch < 11 or (epoch < 50 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
+    if epoch < 11 or (epoch < 200 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
         with torch.no_grad():
             test_itr = 5
             nlls = []

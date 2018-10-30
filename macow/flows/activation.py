@@ -211,7 +211,7 @@ class ELUFlow(Flow):
         input = input.view(input.size(0), -1)
         logdet = input + math.log(self.alpha)
         # [batch]
-        logdet = (input.lt(0.0).float() * logdet).sum(dim=1)
+        logdet = (input.lt(0.0).type_as(input) * logdet).sum(dim=1)
         return out, logdet
 
     @overrides
@@ -228,7 +228,7 @@ class ELUFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        mask = input.lt(0.0).float()
+        mask = input.lt(0.0).type_as(input)
         out = input * (1.0 - mask) + mask * logPlusOne(input.div(self.alpha))
         # [batch, numel]
         out_flat = out.view(input.size(0), -1)

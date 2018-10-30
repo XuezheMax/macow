@@ -50,7 +50,11 @@ class Conv1x1Flow(Flow):
         """
         batch, channels, H, W = input.size()
         weight = self.compute_weight()
-        out = F.conv2d(input, weight.view(self.in_channels, self.in_channels, 1, 1), self.bias)
+        # out = F.conv2d(input, weight.view(self.in_channels, self.in_channels, 1, 1), self.bias)
+        # [batch, W, H, in_channels]
+        input = input.transpose(1, 3)
+        # [batch, in_channels, H, W]
+        out = input.matmul(weight).transpose(1, 3) + self.bias.view(channels, 1, 1)
         _, logdet = torch.slogdet(weight)
         return out, logdet * H * W
 
@@ -71,7 +75,10 @@ class Conv1x1Flow(Flow):
         """
         batch, channels, H, W = input.size()
         weight = self.compute_weight()
-        out = F.conv2d(input - self.bias.view(self.in_channels, 1, 1), weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
+        # out = F.conv2d(input - self.bias.view(self.in_channels, 1, 1), weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
+        out = input - self.bias.view(channels, 1, 1)
+        out = out.transpose(1, 3).matmul(weight.inverse())
+        out = out.transpose(1, 3)
         _, logdet = torch.slogdet(weight)
         return out, logdet * H * W * -1.0
 
