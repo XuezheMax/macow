@@ -29,7 +29,11 @@ def squeeze2d(x, factor=2):
     x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
     # [batch, channels*factor*factor, height/factor, width/factor]
     x = x.view(-1, n_channels * factor * factor, height // factor, width // factor)
-    # [2 * batch, channels*factor*factor/2, height/factor, width/factor)
+    return x
+
+
+def split2d(x):
+    # [2 * batch, channels/2, height, width)
     x = torch.cat(x.chunk(2, dim=1), dim=0)
     return x
 
@@ -38,16 +42,21 @@ def unsqueeze2d(x, factor=2):
     assert factor >= 1
     if factor == 1:
         return x
-    # [2*batch, channels/2, heigh, weight] -> [batch, channels, height, weight]
-    x = torch.cat(x.chunk(2, dim=0), dim=1)
     batch, n_channels, height, width = x.size()
-    assert n_channels >= 4 and n_channels % 4 == 0
+    num_bins = factor ** 2
+    assert n_channels >= num_bins and n_channels % num_bins == 0
     # [batch, channels, height, width] -> [batch, channels/(factor*factor), factor, factor, height, width]
-    x = x.view(-1, int(n_channels / factor ** 2), factor, factor, height, width)
+    x = x.view(-1, int(n_channels / num_bins), factor, factor, height, width)
     # [batch, channels/(factor*factor), height, factor, width, factor]
     x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
     # [batch, channels/(factor*factor), height*factor, width*factor]
-    x = x.view(-1, int(n_channels / factor ** 2), int(height * factor), int(width * factor))
+    x = x.view(-1, int(n_channels / num_bins), int(height * factor), int(width * factor))
+    return x
+
+
+def unsplit2d(x):
+    # [2*batch, channels/2, heigh, weight] -> [batch, channels, height, weight]
+    x = torch.cat(x.chunk(2, dim=0), dim=1)
     return x
 
 
