@@ -1,8 +1,9 @@
 __author__ = 'max'
 
+import math
 import warnings
 from overrides import overrides
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import torch
 import torch.nn as nn
 
@@ -10,6 +11,7 @@ from macow.flows.flow import Flow
 from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
 from macow.flows.activation import IdentityFlow
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
+from macow.nnet import Conv2dWeightNorm
 
 
 class MaCowUnit(Flow):
@@ -160,9 +162,33 @@ class MaCowInternalBlock(Flow):
         super(MaCowInternalBlock, self).__init__(inverse)
         units = [MaCowUnit(in_channels, kernel_size, activation, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
+        self.prior = nn.Sequential(
+            Conv2dWeightNorm(in_channels // 2, in_channels * 2, 3, padding=1),
+            nn.ELU(),
+            Conv2dWeightNorm(in_channels * 2, in_channels, 3, padding=1)
+        )
+
+    def init_prior(self, z, init_scale=1.0):
+        out = z
+        for layer in self.prior:
+            if isinstance(layer, nn.ELU):
+                out = layer(out)
+            else:
+                out = layer.init(out, init_scale=init_scale)
+        return out.chunk(2, dim=1)
+
+    def forward_prior(self, z):
+        out = self.prior(z)
+        return out.chunk(2, dim=1)
+
+    def calc_prior_logp(self, z: torch.Tensor, mu: torch.Tensor, logvar: torch.Tensor):
+        eps = 1e-12
+        log_probs = logvar + (z - mu).pow(2).div(logvar.exp() + eps) + math.log(math.pi * 2.)
+        log_probs = log_probs.view(z.size(0), -1).sum(dim=1) * -0.5
+        return log_probs
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor, h=None) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         # [batch, channels*factor*factor, height/factor, width/factor]
         out = squeeze2d(input, factor=2)
         # [batch]
@@ -170,15 +196,27 @@ class MaCowInternalBlock(Flow):
         for unit in self.units:
             out, logdet = unit.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
-        # [2*batch, channels*factor*factor/2, height/factor, width/factor]
-        out = split2d(out)
-        return out, logdet_accum
+        # [batch, channels*factor*factor/2, height/factor, width/factor] * 2
+        out1, out2 = split2d(out)
+        mu, logvar = self.forward_prior(out1)
+        std = logvar.mul(0.5).exp()
+        eps = (out2 - mu).div(std + 1e-12)
+        logp = self.calc_prior_logp(out2, mu, logvar)
+        return (out1, eps), logdet_accum + logp
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        # [batch / 2, channels * 2, height, width]
-        out = unsplit2d(input)
-        logdet_accum = input.new_zeros(out.size(0))
+    def backward(self, input: torch.Tensor, eps=None, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        # [batch, channels, height, width]
+        mu, logvar = self.forward_prior(input)
+        std = logvar.mul(0.5).exp()
+        if eps is None:
+            eps = input.new_empty(input.size()).normal_()
+        out = eps.mul(std).add(mu)
+        logp = self.calc_prior_logp(out, mu, logvar)
+        # [batch, channels * 2, height, width]
+        out = unsplit2d(input, out)
+
+        logdet_accum = logp * -1.
         for unit in reversed(self.units):
             out, logdet = unit.backward(out, h=h)
             logdet_accum = logdet_accum + logdet
@@ -186,7 +224,7 @@ class MaCowInternalBlock(Flow):
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, h=None, init_scale=1.0) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         # [batch, channels*factor*factor, height/factor, width/factor]
         out = squeeze2d(data, factor=2)
         # [batch]
@@ -194,9 +232,13 @@ class MaCowInternalBlock(Flow):
         for unit in self.units:
             out, logdet = unit.init(out, h=h, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
-        # [2*batch, channels*factor*factor/2, height/factor, width/factor]
-        out = split2d(out)
-        return out, logdet_accum
+        # [batch, channels*factor*factor/2, height/factor, width/factor] * 2
+        out1, out2 = split2d(out)
+        mu, logvar = self.init_prior(out1, init_scale=init_scale)
+        std = logvar.mul(0.5).exp()
+        eps = (out2 - mu).div(std + 1e-12)
+        logp = self.calc_prior_logp(out2, mu, logvar)
+        return (out1, eps), logdet_accum + logp
 
 
 class MaCow(Flow):
@@ -224,86 +266,62 @@ class MaCow(Flow):
         self.output_unit = MaCowUnit(in_channels, kernel_size, IdentityFlow(inverse), inverse=inverse)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
         logdet_accum = input.new_zeros(input.size(0))
         out = input
-        factor = 1
+        eps = []
         for i, block in enumerate(self.blocks):
             out, logdet = block.forward(out, h=h)
-            # [factor * batch] -> [batch]
-            logdet = sum(logdet.chunk(factor, dim=0))
             logdet_accum = logdet_accum + logdet
             if isinstance(block, MaCowInternalBlock):
-                factor = factor * 2
+                out, e = out
+                eps.append(e)
+            else:
+                eps.append(None)
 
         # output unit
         out, logdet = self.output_unit.forward(out, h=h)
-        # [factor * batch] -> [batch]
-        logdet = sum(logdet.chunk(factor, dim=0))
         logdet_accum = logdet_accum + logdet
-
-        # unsqueeze & unsplit
-        if self.levels > 1:
-            out = unsqueeze2d(out, factor=2)
-        for i in range(self.levels - 2):
-            out = unsqueeze2d(unsplit2d(out), factor=2)
-            factor = factor // 2
-        assert factor == 1
-        return out, logdet_accum
+        assert len(eps) == self.levels
+        return out, logdet_accum, eps
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor, eps=None, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out = input
-        # squeeze & split first
-        factor = 1
-        for i in range(self.levels - 2):
-            factor = factor * 2
-            out = split2d(squeeze2d(out, factor=2))
-        if self.levels > 1:
-            out = squeeze2d(out)
-
         # output unit
         out, logdet_accum = self.output_unit.backward(out, h=h)
-        # [factor * batch] -> [batch]
-        logdet_accum = sum(logdet_accum.chunk(factor, dim=0))
+
+        if eps is not None:
+            eps = eps[::-1]
+        else:
+            eps = [None] * self.levels
 
         for i, block in enumerate(reversed(self.blocks)):
             if isinstance(block, MaCowInternalBlock):
-                factor = factor // 2
-            out, logdet = block.backward(out, h=h)
-            # [factor * batch] -> [batch]
-            logdet = sum(logdet.chunk(factor, dim=0))
+                out, logdet = block.backward(out, eps=eps[i], h=h)
+            else:
+                out, logdet = block.backward(out, h=h)
             logdet_accum = logdet_accum + logdet
-        assert factor == 1
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
         logdet_accum = data.new_zeros(data.size(0))
         out = data
-        factor = 1
+        eps = []
         for i, block in enumerate(self.blocks):
             out, logdet = block.init(out, h=h, init_scale=init_scale)
-            # [factor * batch] -> [batch]
-            logdet = sum(logdet.chunk(factor, dim=0))
             logdet_accum = logdet_accum + logdet
             if isinstance(block, MaCowInternalBlock):
-                factor = factor * 2
+                out, e = out
+                eps.append(e)
+            else:
+                eps.append(None)
 
         # output unit
         out, logdet = self.output_unit.init(out, h=h, init_scale=init_scale)
-        # [factor * batch] -> [batch]
-        logdet = sum(logdet.chunk(factor, dim=0))
         logdet_accum = logdet_accum + logdet
-
-        # unsqueeze & unsplit
-        if self.levels > 1:
-            out = unsqueeze2d(out, factor=2)
-        for i in range(self.levels - 2):
-            out = unsqueeze2d(unsplit2d(out), factor=2)
-            factor = factor // 2
-        assert factor == 1
-        return out, logdet_accum
+        return out, logdet_accum, eps
 
     @classmethod
     def from_params(cls, params: Dict) -> "MaCow":

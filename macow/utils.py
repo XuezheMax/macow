@@ -1,5 +1,6 @@
 __author__ = 'max'
 
+from typing import Tuple
 import torch
 
 
@@ -17,7 +18,7 @@ def norm(p: torch.Tensor, dim: int):
         return norm(p.transpose(0, dim), 0).transpose(0, dim)
 
 
-def squeeze2d(x, factor=2):
+def squeeze2d(x, factor=2) -> torch.Tensor:
     assert factor >= 1
     if factor == 1:
         return x
@@ -32,13 +33,12 @@ def squeeze2d(x, factor=2):
     return x
 
 
-def split2d(x):
-    # [2 * batch, channels/2, height, width)
-    x = torch.cat(x.chunk(2, dim=1), dim=0)
-    return x
+def split2d(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    # [batch, channels/2, height, width] * 2
+    return x.chunk(2, dim=1)
 
 
-def unsqueeze2d(x, factor=2):
+def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     assert factor >= 1
     if factor == 1:
         return x
@@ -54,10 +54,9 @@ def unsqueeze2d(x, factor=2):
     return x
 
 
-def unsplit2d(x):
-    # [2*batch, channels/2, heigh, weight] -> [batch, channels, height, weight]
-    x = torch.cat(x.chunk(2, dim=0), dim=1)
-    return x
+def unsplit2d(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+    # [batch, channels/2, heigh, weight] * 2 -> [batch, channels, height, weight]
+    return torch.cat([x1, x2], dim=1)
 
 
 def exponentialMovingAverage(original, shadow, decay_rate, init=False):

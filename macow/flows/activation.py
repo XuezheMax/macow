@@ -15,13 +15,12 @@ class IdentityFlow(Flow):
         super(IdentityFlow, self).__init__(inverse)
 
     @overrides
-    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -31,13 +30,12 @@ class IdentityFlow(Flow):
         return input, input.new_zeros(input.size(0))
 
     @overrides
-    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -47,7 +45,7 @@ class IdentityFlow(Flow):
         return input, input.new_zeros(input.size(0))
 
     @overrides
-    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             return self.forward(data)
 
@@ -67,13 +65,12 @@ class PowshrinkFlow(Flow):
         self.exponent=exponent
 
     @overrides
-    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -90,13 +87,12 @@ class PowshrinkFlow(Flow):
         return out, logdet
 
     @overrides
-    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -113,7 +109,7 @@ class PowshrinkFlow(Flow):
         return out, logdet
 
     @overrides
-    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             return self.forward(data)
 
@@ -133,13 +129,12 @@ class LeakyReLUFlow(Flow):
         self.negative_slope = negative_slope
 
     @overrides
-    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -153,13 +148,12 @@ class LeakyReLUFlow(Flow):
         return out, logdet
 
     @overrides
-    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -174,7 +168,7 @@ class LeakyReLUFlow(Flow):
         return out, logdet
 
     @overrides
-    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             return self.forward(data)
 
@@ -193,13 +187,12 @@ class ELUFlow(Flow):
         self.alpha = alpha
 
     @overrides
-    def forward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -215,13 +208,12 @@ class ELUFlow(Flow):
         return out, logdet
 
     @overrides
-    def backward(self, input: torch.Tensor, *h) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, *]
-            *h:
 
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
@@ -238,7 +230,7 @@ class ELUFlow(Flow):
         return out, logdet
 
     @overrides
-    def init(self, data, *h, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             return self.forward(data)
 

@@ -42,7 +42,7 @@ class Flow(nn.Module):
     def init(self, *input, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
-    def fwdpass(self, x: torch.Tensor, *h, init=False, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def fwdpass(self, x: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs):
         """
 
         Args:
@@ -57,23 +57,22 @@ class Flow(nn.Module):
 
         Returns: y: Tensor, logdet: Tensor
             y, the random variable after flow
-            logdet, the log determinant of :math:`\partial x / \partial y`
-            Then the density :math:`\log(p(y)) = \log(p(x)) + logdet`
+            logdet, the log determinant of :math:`\partial y / \partial x`
+            Then the density :math:`\log(p(y)) = \log(p(x)) - logdet`
 
         """
         if self.inverse:
             if init:
                 raise RuntimeError('inverse flow shold be initialized with backward pass')
             else:
-                y, logdet = self.backward(x, h)
+                return self.backward(x, *h, **kwargs)
         else:
             if init:
-                y, logdet = self.init(x, h, init_scale=init_scale)
+                return self.init(x, *h, init_scale=init_scale, **kwargs)
             else:
-                y, logdet = self.forward(x, h)
-        return y, logdet.mul(-1.0)
+                return self.forward(x, *h, **kwargs)
 
-    def bwdpass(self, y: torch.Tensor, *h, init=False, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def bwdpass(self, y: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs):
         """
 
         Args:
@@ -94,15 +93,14 @@ class Flow(nn.Module):
         """
         if self.inverse:
             if init:
-                x, logdet = self.init(y, h, init_scale=init_scale)
+                return self.init(y, *h, init_scale=init_scale, **kwargs)
             else:
-                x, logdet = self.forward(y, h)
+                return self.forward(y, *h, **kwargs)
         else:
             if init:
                 raise RuntimeError('forward flow should be initialzed with forward pass')
             else:
-                x, logdet = self.backward(y, h)
-        return x, logdet
+                return self.backward(y, *h, **kwargs)
 
     @classmethod
     def register(cls, name: str):
