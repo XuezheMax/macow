@@ -170,7 +170,7 @@ class MaCowTopBlock(Flow):
         out = squeeze2d(input, factor=2)
         # [batch]
         logdet_accum = input.new_zeros(input.size(0))
-        for step, in self.steps:
+        for step in self.steps:
             out, logdet = step.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
