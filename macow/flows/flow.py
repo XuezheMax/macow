@@ -42,7 +42,7 @@ class Flow(nn.Module):
     def init(self, *input, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
-    def fwdpass(self, x: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs):
+    def fwdpass(self, x: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -72,7 +72,7 @@ class Flow(nn.Module):
             else:
                 return self.forward(x, *h, **kwargs)
 
-    def bwdpass(self, y: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs):
+    def bwdpass(self, y: torch.Tensor, *h, init=False, init_scale=1.0, **kwargs) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
