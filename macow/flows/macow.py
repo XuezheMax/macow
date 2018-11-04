@@ -1,9 +1,8 @@
 __author__ = 'max'
 
-import math
 import warnings
 from overrides import overrides
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple
 import torch
 import torch.nn as nn
 
@@ -12,7 +11,6 @@ from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
 from macow.flows.activation import IdentityFlow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
-from macow.nnet import Conv2dWeightNorm
 
 
 class MaCowUnit(Flow):
