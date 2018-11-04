@@ -246,3 +246,4 @@ class ELUFlow(Flow):
 PowshrinkFlow.register('power_shrink')
 LeakyReLUFlow.register('leaky_relu')
 ELUFlow.register('elu')
+IdentityFlow.register('identity')

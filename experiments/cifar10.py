@@ -172,6 +172,9 @@ eps = 1e-8
 lr = args.lr
 warmups = args.warmup_epochs
 
+# number of parameters
+print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
+
 optimizer = get_optimizer(lr, fgen.parameters())
 lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
 scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
