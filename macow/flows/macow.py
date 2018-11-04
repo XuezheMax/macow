@@ -17,15 +17,11 @@ class MaCowUnit(Flow):
     """
     A Unit of Flows with an MCF(A), MCF(B), an Conv1x1, followd by an ActNorm and an activation.
     """
-    def __init__(self, in_channels, kernel_size, activation: Flow, inverse=False):
+    def __init__(self, in_channels, kernel_size, inverse=False):
         super(MaCowUnit, self).__init__(inverse)
         self.conv1 = MaskedConvFlow(in_channels, kernel_size, mask_type='A', inverse=inverse)
         self.conv2 = MaskedConvFlow(in_channels, kernel_size, mask_type='B', inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        if activation.inverse != inverse:
-            activation.inverse = inverse
-            warnings.warn('activation inverse does not match MaCow inverse')
-        self.activation = activation
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -36,16 +32,10 @@ class MaCowUnit(Flow):
         out, logdet = self.conv1x1.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.activation.forward(out)
-        logdet_accum = logdet_accum + logdet
-
         return out, logdet_accum
 
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.activation.backward(input)
-
-        out, logdet = self.conv1x1.backward(out, h=h)
-        logdet_accum = logdet_accum + logdet
+        out, logdet_accum = self.conv1x1.backward(input, h=h)
 
         out, logdet = self.conv2.backward(out, h=h)
         logdet_accum = logdet_accum + logdet
@@ -63,27 +53,21 @@ class MaCowUnit(Flow):
         out, logdet = self.conv1x1.init(out, h=h, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.activation.init(out, init_scale=init_scale)
-        logdet_accum = logdet_accum + logdet
-
         return out, logdet_accum
 
     @classmethod
     def from_params(cls, params: Dict) -> "MaCowUnit":
-        activation_params = params.pop('activation')
-        activation = Flow.by_name(activation_params.pop('type')).from_params(activation_params)
-        return MaCowUnit(**params, activation=activation)
+        return MaCowUnit(**params)
 
 
 class MaCowStep(Flow):
     """
     A step of Macow Flows with 4 Macow Unit and a NICE coupling layer
     """
-    def __init__(self, in_channels, kernel_size, activation: Flow, scale=True, inverse=False):
+    def __init__(self, in_channels, kernel_size, scale=True, inverse=False):
         super(MaCowStep, self).__init__(inverse)
-        num_units = 3
-        units = [MaCowUnit(in_channels, kernel_size, activation, inverse=inverse) for _ in range(num_units)]
-        units.append(MaCowUnit(in_channels, kernel_size, IdentityFlow(inverse=inverse), inverse=inverse))
+        num_units = 2
+        units = [MaCowUnit(in_channels, kernel_size, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
         self.coupling = NICE(in_channels, scale=scale, inverse=inverse)
 
@@ -121,9 +105,9 @@ class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (No squeeze and split)
     """
-    def __init__(self, num_units, in_channels, kernel_size, activation: Flow, inverse=False):
+    def __init__(self, num_units, in_channels, kernel_size, inverse=False):
         super(MaCowBottomBlock, self).__init__(inverse)
-        units = [MaCowUnit(in_channels, kernel_size, activation, inverse=inverse) for _ in range(num_units)]
+        units = [MaCowUnit(in_channels, kernel_size, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
 
     @overrides
@@ -158,9 +142,9 @@ class MaCowTopBlock(Flow):
     """
     Masked Convolutional Flow Block (squeeze at beginning)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, activation: Flow, scale=True, inverse=False):
+    def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False):
         super(MaCowTopBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, activation, scale=scale, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -197,9 +181,9 @@ class MaCowInternalBlock(Flow):
     """
     Masked Convolution Flow Internal Block (squeeze at beginning and split at end)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, activation: Flow, scale=True, inverse=False):
+    def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False):
         super(MaCowInternalBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, activation, scale=scale, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
         self.prior = NICE(in_channels, scale=True, inverse=inverse)
 
@@ -241,7 +225,7 @@ class MaCow(Flow):
     """
     Masked Convolutional Flow
     """
-    def __init__(self, levels, num_steps, in_channels, kernel_size, activation: Flow, scale=True, inverse=False):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, scale=True, inverse=False):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)
@@ -249,15 +233,15 @@ class MaCow(Flow):
         self.levels = levels
         for level in range(levels):
             if level == 0:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, activation, inverse=inverse)
+                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, inverse=inverse)
                 blocks.append(macow_block)
             elif level == levels - 1:
                 in_channels = in_channels * 4
-                macow_block = MaCowTopBlock(num_steps[level], in_channels, kernel_size, activation, scale=scale, inverse=inverse)
+                macow_block = MaCowTopBlock(num_steps[level], in_channels, kernel_size, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, activation, scale=scale, inverse=inverse)
+                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
                 in_channels = in_channels // 2
         self.blocks = nn.ModuleList(blocks)
@@ -329,9 +313,7 @@ class MaCow(Flow):
 
     @classmethod
     def from_params(cls, params: Dict) -> "MaCow":
-        activation_params = params.pop('activation')
-        activation = Flow.by_name(activation_params.pop('type')).from_params(activation_params)
-        return MaCow(**params, activation=activation)
+        return MaCow(**params)
 
 
 MaCow.register('macow')
