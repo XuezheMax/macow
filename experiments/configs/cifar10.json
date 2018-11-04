@@ -1,8 +1,8 @@
 {
   "flow": {
     "type": "macow",
-    "levels": 3,
-    "num_units": [32, 32, 16],
+    "levels": 4,
+    "num_steps": [8, 8, 8, 8],
     "in_channels": 3,
     "kernel_size": 3,
     "activation": {
