@@ -3,7 +3,7 @@ __author__ = 'max'
 import os
 import json
 import math
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple
 import torch
 import torch.nn as nn
 
@@ -24,7 +24,7 @@ class FlowGenModel(nn.Module):
         if ngpu > 1:
             self.flow = DataParallelFlow(self.flow)
 
-    def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
+    def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -37,10 +37,10 @@ class FlowGenModel(nn.Module):
             Then the density :math:`\log(p(x)) = \log(p(z)) + logdet`
             eps: eps for multi-scale architecture.
         """
-        z, logdet, eps = self.flow.bwdpass(x)
-        return z, logdet, eps
+        z, logdet = self.flow.bwdpass(x)
+        return z, logdet
 
-    def decode(self, z, eps=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def decode(self, z) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -52,10 +52,10 @@ class FlowGenModel(nn.Module):
             logdet, the log determinant of :math:`\partial z / \partial x`
             Then the density :math:`\log(p(x)) = \log(p(z)) + logdet`
         """
-        x, logdet = self.flow.fwdpass(z, eps=eps)
+        x, logdet = self.flow.fwdpass(z)
         return x, logdet
 
-    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.flow.bwdpass(data, init=True, init_scale=init_scale)
 
     def log_probability(self, x) -> torch.Tensor:
@@ -70,7 +70,7 @@ class FlowGenModel(nn.Module):
             The tensor of the posterior probabilities of x shape = [batch]
         """
         # [batch, x_shape]
-        z, logdet, eps = self.encode(x)
+        z, logdet = self.encode(x)
         log_probs = z.pow(2) + math.log(math.pi * 2.)
         # [batch, x_shape] --> [batch, numels] -- > [batch]
         log_probs = log_probs.view(z.size(0), -1).sum(dim=1) * -0.5 + logdet
