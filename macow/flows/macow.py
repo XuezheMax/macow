@@ -83,8 +83,9 @@ class MaCowStep(Flow):
     """
     def __init__(self, in_channels, kernel_size, activation: Flow, inverse=False):
         super(MaCowStep, self).__init__(inverse)
-        num_units = 4
+        num_units = 3
         units = [MaCowUnit(in_channels, kernel_size, activation, inverse=inverse) for _ in range(num_units)]
+        units.append(MaCowUnit(in_channels, kernel_size, IdentityFlow(inverse=inverse), inverse=inverse))
         self.units = nn.ModuleList(units)
         self.coupling = NICE(in_channels, inverse=inverse)
 
