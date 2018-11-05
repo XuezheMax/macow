@@ -101,42 +101,6 @@ class MaCowStep(Flow):
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
-class MaCowBottomBlock(Flow):
-    """
-    Masked Convolutional Flow Block (No squeeze and split)
-    """
-    def __init__(self, num_units, in_channels, kernel_size, inverse=False):
-        super(MaCowBottomBlock, self).__init__(inverse)
-        units = [MaCowUnit(in_channels, kernel_size, inverse=inverse) for _ in range(num_units)]
-        self.units = nn.ModuleList(units)
-
-    @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = input.new_zeros(input.size(0))
-        out = input
-        for unit in self.units:
-            out, logdet = unit.forward(out, h=h)
-            logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
-    @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = input.new_zeros(input.size(0))
-        out = input
-        for unit in reversed(self.units):
-            out, logdet = unit.backward(out, h=h)
-            logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
-    @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = data.new_zeros(data.size(0))
-        out = data
-        for unit in self.units:
-            out, logdet = unit.init(out, h=h, init_scale=init_scale)
-            logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
 
 class MaCowTopBlock(Flow):
     """
@@ -232,10 +196,7 @@ class MaCow(Flow):
         blocks = []
         self.levels = levels
         for level in range(levels):
-            if level == 0:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, inverse=inverse)
-                blocks.append(macow_block)
-            elif level == levels - 1:
+            if level == levels - 1:
                 in_channels = in_channels * 4
                 macow_block = MaCowTopBlock(num_steps[level], in_channels, kernel_size, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
@@ -252,8 +213,7 @@ class MaCow(Flow):
         out = input
         outputs = []
         for i, block in enumerate(self.blocks):
-            if isinstance(block, MaCowInternalBlock) or isinstance(block, MaCowTopBlock):
-                out = squeeze2d(out, factor=2)
+            out = squeeze2d(out, factor=2)
             out, logdet = block.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
             if isinstance(block, MaCowInternalBlock):
@@ -262,7 +222,7 @@ class MaCow(Flow):
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
-        for _ in range(self.levels - 2):
+        for _ in range(self.levels - 1):
             out2 = outputs.pop()
             out = unsqueeze2d(unsplit2d(out, out2), factor=2)
         assert len(outputs) == 0
@@ -272,7 +232,7 @@ class MaCow(Flow):
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
         outputs = []
         out = squeeze2d(input, factor=2)
-        for _ in range(self.levels - 2):
+        for _ in range(self.levels - 1):
             out1, out2 = split2d(out)
             outputs.append(out2)
             out = squeeze2d(out1, factor=2)
@@ -284,8 +244,7 @@ class MaCow(Flow):
                 out = unsplit2d(out, out2)
             out, logdet = block.backward(out, h=h)
             logdet_accum = logdet_accum + logdet
-            if isinstance(block, MaCowInternalBlock) or isinstance(block, MaCowTopBlock):
-                out = unsqueeze2d(out, factor=2)
+            out = unsqueeze2d(out, factor=2)
         assert len(outputs) == 0
         return out, logdet_accum
 
@@ -295,8 +254,7 @@ class MaCow(Flow):
         out = data
         outputs = []
         for i, block in enumerate(self.blocks):
-            if isinstance(block, MaCowInternalBlock) or isinstance(block, MaCowTopBlock):
-                out = squeeze2d(out, factor=2)
+            out = squeeze2d(out, factor=2)
             out, logdet = block.init(out, h=h, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
             if isinstance(block, MaCowInternalBlock):
@@ -305,7 +263,7 @@ class MaCow(Flow):
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
-        for _ in range(self.levels - 2):
+        for _ in range(self.levels - 1):
             out2 = outputs.pop()
             out = unsqueeze2d(unsplit2d(out, out2), factor=2)
         assert len(outputs) == 0
