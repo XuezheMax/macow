@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 from macow.flows.flow import Flow
-from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
+from macow.flows.conv import MaskedConvFlow, Conv1x1WeightNormFlow
 from macow.flows.activation import IdentityFlow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
@@ -21,7 +21,7 @@ class MaCowUnit(Flow):
         super(MaCowUnit, self).__init__(inverse)
         self.conv1 = MaskedConvFlow(in_channels, kernel_size, mask_type='A', inverse=inverse)
         self.conv2 = MaskedConvFlow(in_channels, kernel_size, mask_type='B', inverse=inverse)
-        self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
+        self.conv1x1 = Conv1x1WeightNormFlow(in_channels, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
