@@ -73,8 +73,8 @@ class Conv1x1Flow(Flow):
         return 'inverse={}, in_channels={}'.format(self.inverse, self.in_channels)
 
     @classmethod
-    def from_params(cls, params: Dict) -> "Conv1x1WeightNormFlow":
-        return Conv1x1WeightNormFlow(**params)
+    def from_params(cls, params: Dict) -> "Conv1x1Flow":
+        return Conv1x1Flow(**params)
 
 
 class Conv1x1WeightNormFlow(Flow):
@@ -333,5 +333,6 @@ class MaskedConvFlow(Flow):
         return MaskedConvFlow(**params)
 
 
-Conv1x1WeightNormFlow.register('conv1x1')
+Conv1x1Flow.register('conv1x1')
+Conv1x1WeightNormFlow.register('conv1x1_weightnorm')
 MaskedConvFlow.register('masked_conv')
