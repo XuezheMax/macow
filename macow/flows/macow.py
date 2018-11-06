@@ -116,7 +116,7 @@ class MaCowBottomBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False, dropout=0.0):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, scale=False, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
