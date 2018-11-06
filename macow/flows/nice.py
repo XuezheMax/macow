@@ -22,11 +22,9 @@ class ResNetBlock(nn.Module):
     def init(self, x, init_scale=1.0):
         residual = self.downsample.init(x, init_scale=0.0)
 
-        out = self.conv1.init(x, init_scale=init_scale)
-        out = self.activation(out)
+        out = self.activation(self.conv1.init(x, init_scale=init_scale))
 
-        out = self.conv2.init(out, init_scale=init_scale)
-        out = self.activation(out)
+        out = self.activation(self.conv2.init(out, init_scale=init_scale))
 
         # dropout
         out = self.dropout(out)
