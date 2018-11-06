@@ -10,13 +10,14 @@ from macow.nnet import Conv2dWeightNorm
 
 
 class ResNetBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels):
+    def __init__(self, in_channels, out_channels, hidden_channels, dropout=0.0):
         super(ResNetBlock, self).__init__()
         self.conv1 = Conv2dWeightNorm(in_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
         self.downsample = Conv2dWeightNorm(in_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU()
+        self.dropout = nn.Dropout(dropout)
 
     def init(self, x, init_scale=1.0):
         residual = self.downsample.init(x, init_scale=0.0)
@@ -26,6 +27,9 @@ class ResNetBlock(nn.Module):
 
         out = self.conv2.init(out, init_scale=init_scale)
         out = self.activation(out)
+
+        # dropout
+        out = self.dropout(out)
 
         out = self.conv3.init(out, init_scale=0.0)
 
@@ -38,19 +42,25 @@ class ResNetBlock(nn.Module):
 
         out = self.activation(self.conv2(out))
 
+        # dropout
+        out = self.dropout(out)
+
         out = self.conv3(out) + residual
         return out
 
 
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False):
+    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False, dropout=0.0):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
-        out_channels = in_channels if scale else in_channels // 2
         if hidden_channels is None:
             hidden_channels = 8 * in_channels
-        self.net = ResNetBlock(in_channels // 2, out_channels, hidden_channels=hidden_channels)
+        out_channels = in_channels // 2
+        in_channels = in_channels - out_channels
+        if scale:
+            out_channels = out_channels * 2
+        self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
