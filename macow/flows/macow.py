@@ -20,44 +20,30 @@ class MaCowUnit(Flow):
     def __init__(self, in_channels, kernel_size, inverse=False):
         super(MaCowUnit, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
-        self.conv1x1_in = Conv1x1Flow(in_channels, inverse=inverse)
+        self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
         self.conv1 = MaskedConvFlow(in_channels, kernel_size, mask_type='A', inverse=inverse)
-        self.conv1x1_hidden = Conv1x1Flow(in_channels, inverse=inverse)
         self.conv2 = MaskedConvFlow(in_channels, kernel_size, mask_type='B', inverse=inverse)
-        self.conv1x1_out = Conv1x1Flow(in_channels, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.actnorm.forward(input, h=h)
-        out, logdet = self.conv1x1_in.forward(out, h=h)
+        out, logdet = self.conv1x1.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
 
         out, logdet = self.conv1.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.conv1x1_hidden.forward(out, h=h)
-        logdet_accum = logdet_accum + logdet
-
         out, logdet = self.conv2.forward(out, h=h)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.conv1x1_out.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.conv1x1_out.backward(input, h=h)
-
-        out, logdet = self.conv2.backward(out, h=h)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.conv1x1_hidden.backward(out, h=h)
-        logdet_accum = logdet_accum + logdet
+        out, logdet_accum = self.conv2.backward(input, h=h)
 
         out, logdet = self.conv1.backward(out, h=h)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.conv1x1_in.backward(out, h=h)
+        out, logdet = self.conv1x1.backward(out, h=h)
         logdet_accum = logdet_accum + logdet
 
         out, logdet = self.actnorm.backward(out, h=h)
@@ -67,19 +53,13 @@ class MaCowUnit(Flow):
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.actnorm.init(data, h=h, init_scale=init_scale)
-        out, logdet = self.conv1x1_in.init(out, h=h)
+        out, logdet = self.conv1x1.init(out, h=h)
         logdet_accum = logdet_accum + logdet
 
         out, logdet = self.conv1.init(out, h=h, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.conv1x1_hidden.init(out, h=h, init_scale=init_scale)
-        logdet_accum = logdet_accum + logdet
-
         out, logdet = self.conv2.init(out, h=h, init_scale=init_scale)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.conv1x1_out.init(out, h=h, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
