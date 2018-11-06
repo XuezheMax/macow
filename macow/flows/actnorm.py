@@ -83,14 +83,14 @@ class ActNormFlow(Flow):
 
         """
         with torch.no_grad():
-            out, _ = self.forward(data)
+            out, _ = self.forward(data, h=h)
             mean = out.view(-1, self.in_features).mean(dim=0)
             std = out.view(-1, self.in_features).std(dim=0)
             inv_stdv = init_scale / (std + 1e-6)
 
             self.log_scale.add_(inv_stdv.log())
             self.bias.add_(-mean).mul_(inv_stdv)
-            return self.forward(data)
+            return self.forward(data, h=h)
 
     @overrides
     def extra_repr(self):
@@ -158,7 +158,7 @@ class ActNorm2dFlow(Flow):
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             # [batch, n_channels, H, W]
-            out, _ = self.forward(data)
+            out, _ = self.forward(data, h=h)
             out = out.transpose(0, 1).contiguous().view(self.in_channels, -1)
             # [n_channels, 1, 1]
             mean = out.mean(dim=1).view(self.in_channels, 1, 1)
@@ -167,7 +167,7 @@ class ActNorm2dFlow(Flow):
 
             self.log_scale.add_(inv_stdv.log())
             self.bias.add_(-mean).mul_(inv_stdv)
-            return self.forward(data)
+            return self.forward(data, h=h)
 
     @overrides
     def extra_repr(self):

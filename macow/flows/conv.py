@@ -177,9 +177,9 @@ class MaskedConvFlow(Flow):
             assert k % 2 == 1, 'kernel cannot include even number: {}'.format(self.kernel_size)
         self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
 
-        self.weight_v = Parameter(torch.Tensor(in_channels, 1, 1, *self.kernel_size))
-        self.weight_g = Parameter(torch.Tensor(in_channels, 1, 1, 1, 1))
-        self.bias = Parameter(torch.Tensor(in_channels, 1, 1))
+        self.weight_v = Parameter(torch.Tensor(in_channels, 1, *self.kernel_size))
+        self.weight_g = Parameter(torch.Tensor(in_channels, 1, 1, 1))
+        self.bias = Parameter(torch.Tensor(in_channels))
         self.register_buffer('mask', torch.ones(self.kernel_size))
         kH, kW = self.kernel_size
         mask = np.ones([*self.mask.size()], dtype=np.float32)
@@ -198,7 +198,7 @@ class MaskedConvFlow(Flow):
         with torch.no_grad():
             cH = self.kernel_size[0] // 2
             cW = self.kernel_size[1] // 2
-            self.weight_v[:, 0, 0, cH, cW].add_(1.0)
+            self.weight_v[:, 0, cH, cW].add_(1.0)
         self.weight_v.data.mul_(self.mask)
         _norm = norm(self.weight_v, 0).data + 1e-8
         self.weight_g.data.copy_(_norm.log())
@@ -226,17 +226,14 @@ class MaskedConvFlow(Flow):
 
         """
         batch, channels, H, W = input.size()
-        # [batch, in_channels, 1, H, W]
-        input = input.unsqueeze(2)
         weight = self.compute_weight()
-        outs = [F.conv2d(input[:, i], weight[i], padding=self.padding) for i in range(channels)]
         # [batch, in_channels, H, W]
-        out = torch.cat(outs, dim=1) + self.bias
+        out = F.conv2d(input, weight, bias=self.bias, padding=self.padding, groups=channels)
 
         cH = self.kernel_size[0] // 2
         cW = self.kernel_size[1] // 2
         # [in_channels]
-        logdet = weight[:, 0, 0, cH, cW]
+        logdet = weight[:, 0, cH, cW]
         logdet = logdet.abs().log().sum() * H * W
         return out, logdet
 
@@ -253,7 +250,7 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, si:i+1, sj:tj]
                 out_curr = out[:, :, si:i+1, sj:tj]
                 # [batch, channels, cH, cW]
-                tmp, _ = self.forward(out_curr)
+                tmp, _ = self.forward(out_curr, h=h)
                 new_out = (input_curr - tmp).div(c_weight)
                 out[:, :, i, j] = new_out[:, :, -1, j - sj]
         return out
@@ -271,7 +268,7 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, i:si, sj:tj]
                 out_curr = out[:, :, i:si, sj:tj]
                 # [batch, channels, cH, cW]
-                tmp, _ = self.forward(out_curr)
+                tmp, _ = self.forward(out_curr, h=h)
                 new_out = (input_curr - tmp).div(c_weight)
                 out[:, :, i, j] = new_out[:, :, 0, j - sj]
         return out
@@ -297,7 +294,7 @@ class MaskedConvFlow(Flow):
         batch, channels, H, W = input.size()
 
         weight = self.compute_weight()
-        c_weight = weight[:, 0, 0, cH, cW]
+        c_weight = weight[:, 0, cH, cW]
         logdet = c_weight.abs().log().sum() * H * W * -1.0
 
         # [channels, 1, 1]
@@ -312,16 +309,16 @@ class MaskedConvFlow(Flow):
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             # [batch, n_channels, H, W]
-            out, _ = self.forward(data)
+            out, _ = self.forward(data, h=h)
             n_channels = out.size(1)
             out = out.transpose(0, 1).contiguous().view(n_channels, -1)
-            # [n_channels, 1, 1]
-            mean = out.mean(dim=1).view(n_channels, 1, 1)
-            std = out.std(dim=1).view(n_channels, 1, 1)
+            # [n_channels]
+            mean = out.mean(dim=1)
+            std = out.std(dim=1)
             inv_stdv = init_scale / (std + 1e-6)
-            self.weight_g.add_(inv_stdv.log().view(n_channels, 1, 1, 1, 1))
+            self.weight_g.add_(inv_stdv.log().view(n_channels, 1, 1, 1))
             self.bias.add_(-mean).mul_(inv_stdv)
-            return self.forward(data)
+            return self.forward(data, h=h)
 
     @overrides
     def extra_repr(self):
