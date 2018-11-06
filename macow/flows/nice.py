@@ -17,7 +17,7 @@ class ResNetBlock(nn.Module):
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
         self.downsample = Conv2dWeightNorm(in_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
-        self.dropout = nn.Dropout(dropout, inplace=True)
+        self.dropout = nn.Dropout(dropout)
 
     def init(self, x, init_scale=1.0):
         residual = self.downsample.init(x, init_scale=0.0)
