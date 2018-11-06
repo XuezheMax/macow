@@ -17,11 +17,11 @@ class GlowStep(Flow):
     """
     A step of Glow. A Conv1x1 followed with a NICE
     """
-    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, in_channels, scale=True, inverse=False, dropout=0.0):
         super(GlowStep, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=512, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -62,7 +62,7 @@ class GlowTopBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, scale=True, inverse=False, dropout=0.0):
         super(GlowTopBlock, self).__init__(inverse)
-        steps = [GlowStep(in_channels, hidden_channels=512, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [GlowStep(in_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -101,7 +101,7 @@ class GlowInternalBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, scale=True, inverse=False, dropout=0.0):
         super(GlowInternalBlock, self).__init__(inverse)
-        steps = [GlowStep(in_channels, hidden_channels=512, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [GlowStep(in_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
         self.prior = NICE(in_channels, scale=True, inverse=inverse)
 
