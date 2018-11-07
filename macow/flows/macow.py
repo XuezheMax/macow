@@ -72,12 +72,12 @@ class MaCowStep(Flow):
     """
     A step of Macow Flows with 4 Macow Unit and a NICE coupling layer
     """
-    def __init__(self, in_channels, kernel_size, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, in_channels, kernel_size, hidden_channels, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
         num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
-        self.coupling = NICE(in_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -116,7 +116,7 @@ class MaCowBottomBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, kernel_size, inverse=False):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, scale=False, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, None, scale=False, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -155,7 +155,8 @@ class MaCowTopBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False, dropout=0.0):
         super(MaCowTopBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        hidden_channels = 512
+        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -194,7 +195,8 @@ class MaCowInternalBlock(Flow):
     """
     def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False, dropout=0.0):
         super(MaCowInternalBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        hidden_channels = 512
+        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
         self.prior = NICE(in_channels, scale=True, inverse=inverse)
 
