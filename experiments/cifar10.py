@@ -174,7 +174,7 @@ def reconstruct():
     img = preprocess(data, n_bits, False).to(device)
 
     z, _ = fgen.encode(img)
-    img_recon = fgen.decode(z)
+    img_recon, _ = fgen.decode(z)
 
     abs_err = img_recon.add(img * -1).abs()
     print('Err: {.4f}, {.4f}'.format(abs_err.max(), abs_err.mean()))
