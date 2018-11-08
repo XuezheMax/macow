@@ -22,7 +22,7 @@ class FlowGenModel(nn.Module):
         assert ngpu > 0, 'the number of GPUs should be positive.'
         self.ngpu = ngpu
         if ngpu > 1:
-            self.flow = DataParallelFlow(self.flow)
+            self.flow = DataParallelFlow(self.flow, device_ids=list(range(ngpu)))
 
     def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         """

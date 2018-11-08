@@ -1,6 +1,5 @@
 __author__ = 'max'
 
-import warnings
 from overrides import overrides
 from typing import Dict, Tuple
 import torch
