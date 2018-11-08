@@ -166,6 +166,28 @@ def eval(eval_data, eval_index):
     return test_nll, bits_per_pixel
 
 
+def reconstruct():
+    print('reconstruct')
+    fgen.eval()
+    n = 128
+    data, _ = get_batch(test_data, test_index[:n])
+    img = preprocess(data, n_bits, False).to(device)
+
+    z, _ = fgen.encode(img)
+    img_recon = fgen.decode(z)
+
+    abs_err = img_recon.add(img * -1).abs()
+    print('Err: {.4f}, {.4f}'.format(abs_err.max(), abs_err.mean()))
+
+    img = postprocess(img, n_bits)
+    img_recon = postprocess(img_recon, n_bits)
+    comparison = torch.cat([data, img, img_recon], dim=0).cpu()
+    reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(3)] for i in range(n)])).view(-1)
+    comparison = comparison[reorder_index]
+    image_file = 'reconstruct.png'
+    save_image(comparison, os.path.join(result_path, image_file), nrow=24, normalize=True, scale_each=True, range=(-1, 1))
+
+
 opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
@@ -226,4 +248,6 @@ fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():
     print('Final test:')
     eval(test_data, test_index)
-    print('-' * 5)
+    print('-' * 50)
+    reconstruct()
+
