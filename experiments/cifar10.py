@@ -109,7 +109,7 @@ def train(epoch):
     num_back = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(iterate_minibatches(train_data, train_index, args.batch_size, True)):
-        data = preprocess(data, n_bits, True).to(device)
+        data = preprocess(data.to(device), n_bits, True)
 
         batch_size = len(data)
         optimizer.zero_grad()
@@ -151,7 +151,7 @@ def eval(eval_data, eval_index):
     test_nll = 0
     num_insts = 0
     for i, (data, _) in enumerate(iterate_minibatches(eval_data, eval_index, 500, False)):
-        data = preprocess(data, n_bits, True).to(device)
+        data = preprocess(data.to(device), n_bits, True)
 
         batch_size = len(data)
         log_probs = fgen.log_probability(data)
@@ -170,9 +170,8 @@ def reconstruct():
     print('reconstruct')
     fgen.eval()
     n = 128
-    data, _ = get_batch(test_data, test_index[:n])
-    data = data.to(device)
-    img = preprocess(data, n_bits, False)
+    img, _ = get_batch(test_data, test_index[:n])
+    img = preprocess(img.to(device), n_bits, False)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -182,11 +181,11 @@ def reconstruct():
 
     img = postprocess(img, n_bits)
     img_recon = postprocess(img_recon, n_bits)
-    comparison = torch.cat([data, img, img_recon], dim=0).cpu()
-    reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(3)] for i in range(n)])).view(-1)
+    comparison = torch.cat([img, img_recon], dim=0).cpu()
+    reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(2)] for i in range(n)])).view(-1)
     comparison = comparison[reorder_index]
     image_file = 'reconstruct.png'
-    save_image(comparison, os.path.join(result_path, image_file), nrow=24, normalize=True, scale_each=True, range=(-1, 1))
+    save_image(comparison, os.path.join(result_path, image_file), nrow=16)
 
 
 opt = args.opt
