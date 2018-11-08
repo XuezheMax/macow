@@ -225,6 +225,7 @@ for epoch in range(1, args.epochs + 1):
             nll = sum(nlls) / test_itr
             bits_per_pixel = sum(bits_per_pixels) / test_itr
             print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
+            reconstruct()
         if nll < best_nll:
             patient = 0
             torch.save(fgen.state_dict(), model_name)
