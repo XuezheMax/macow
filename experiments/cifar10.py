@@ -171,7 +171,8 @@ def reconstruct():
     fgen.eval()
     n = 128
     data, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(data, n_bits, False).to(device)
+    data = data.to(device)
+    img = preprocess(data, n_bits, False)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
