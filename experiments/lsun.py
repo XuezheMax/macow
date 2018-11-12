@@ -22,10 +22,12 @@ from macow.utils import exponentialMovingAverage
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
-parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
+parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
+parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 128)')
+parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
-parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
+parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate the model (default: 50)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
@@ -33,6 +35,7 @@ parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization meth
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
+parser.add_argument('--data_path', help='path for data file.', default=None)
 parser.add_argument('--recover', action='store_true', help='recover the model from disk.')
 
 args = parser.parse_args()
@@ -44,8 +47,10 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
-dataset = 'cifar10'
-imageSize = 32
+imageSize = args.image_size
+assert imageSize in [64, 128]
+category = args.category
+dataset = 'lsun' + str(imageSize) + '_' + category
 nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
@@ -61,7 +66,7 @@ result_path = os.path.join(model_path, 'images')
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 
-train_data, test_data = load_datasets(dataset)
+train_data, test_data = load_datasets(dataset, args.data_path)
 
 train_index = np.arange(len(train_data))
 np.random.shuffle(train_index)
@@ -293,4 +298,3 @@ with torch.no_grad():
     eval(test_data, test_index)
     print('-' * 50)
     reconstruct()
-
