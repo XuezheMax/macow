@@ -26,10 +26,7 @@ class ResNetBlock(nn.Module):
 
         out = self.activation(self.conv2.init(out, init_scale=init_scale))
 
-        # dropout
-        out = self.dropout(out)
-
-        out = self.conv3.init(out, init_scale=0.0)
+        out = self.conv3.init(self.dropout(out), init_scale=0.0)
 
         return out + residual
 
@@ -40,10 +37,7 @@ class ResNetBlock(nn.Module):
 
         out = self.activation(self.conv2(out))
 
-        # dropout
-        out = self.dropout(out)
-
-        out = self.conv3(out) + residual
+        out = self.conv3(self.dropout(out)) + residual
         return out
 
 

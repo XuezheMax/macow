@@ -22,10 +22,10 @@ from macow.utils import exponentialMovingAverage
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
-parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 64)')
-parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train (default: 10)')
-parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to train (default: 10)')
-parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 10)')
+parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
+parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
+parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
+parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
@@ -33,6 +33,7 @@ parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization meth
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
+parser.add_argument('--recover', action='store_true', help='recover the model from disk.')
 
 args = parser.parse_args()
 args.cuda = torch.cuda.is_available()
@@ -52,6 +53,7 @@ n_bins = 2. ** n_bits
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
+checkpoint_name = os.path.join(model_path, 'checkpoint.tar')
 if not os.path.exists(model_path):
     os.makedirs(model_path)
 
@@ -63,32 +65,13 @@ train_data, test_data = load_datasets(dataset)
 
 train_index = np.arange(len(train_data))
 np.random.shuffle(train_index)
-# val_index = train_index[-n_val:]
-# train_index = train_index[:-n_val]
 
 test_index = np.arange(len(test_data))
 np.random.shuffle(test_index)
 
 print(len(train_index))
-# print(len(val_index))
 print(len(test_index))
 
-polyak_decay = args.polyak
-params = json.load(open(args.config, 'r'))
-json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
-fgen = FlowGenModel.from_params(params).to(device)
-# initialize
-init_batch_size = 2048
-init_index = np.random.choice(train_index, init_batch_size, replace=False)
-init_data, _ = get_batch(train_data, init_index)
-init_data = preprocess(init_data, n_bits, True).to(device)
-fgen.eval()
-fgen.init(init_data, init_scale=1.0)
-# create shadow mae for ema
-params = json.load(open(args.config, 'r'))
-# fgen_shadow = FlowGenModel.from_params(params).to(device)
-# exponentialMovingAverage(fgen, fgen_shadow, polyak_decay, init=True)
-print(args)
 
 def get_optimizer(learning_rate, parameters):
     if opt == 'adam':
@@ -188,28 +171,60 @@ def reconstruct():
     save_image(comparison, os.path.join(result_path, image_file), nrow=16)
 
 
+print(args)
+polyak_decay = args.polyak
 opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
 lr = args.lr
 warmups = args.warmup_epochs
-
-# number of parameters
-print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
-
-optimizer = get_optimizer(lr, fgen.parameters())
-lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
-scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
-scheduler.step()
-
 step_decay = 0.999995
-lr_min = lr / 20
-patient = 0
 
-best_epoch = 0
-best_nll = 1e12
-best_bpd = 1e12
-for epoch in range(1, args.epochs + 1):
+if args.recover:
+    fgen = FlowGenModel.load(model_path, device)
+    checkpoint = torch.load(checkpoint_name)
+    optimizer = get_optimizer(lr, fgen.parameters())
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
+
+    start_epoch = checkpoint['epoch']
+    patient = checkpoint['patient']
+    best_epoch = checkpoint['best_epoch']
+    best_nll = checkpoint['best_nll']
+    best_bpd = checkpoint['best_bpd']
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    scheduler.load_state_dict(checkpoint['scheduler'])
+else:
+    params = json.load(open(args.config, 'r'))
+    json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
+    fgen = FlowGenModel.from_params(params).to(device)
+    # initialize
+    init_batch_size = 2048
+    init_index = np.random.choice(train_index, init_batch_size, replace=False)
+    init_data, _ = get_batch(train_data, init_index)
+    init_data = preprocess(init_data, n_bits, True).to(device)
+    fgen.eval()
+    fgen.init(init_data, init_scale=1.0)
+    # create shadow mae for ema
+    # params = json.load(open(args.config, 'r'))
+    # fgen_shadow = FlowGenModel.from_params(params).to(device)
+    # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay, init=True)
+
+    optimizer = get_optimizer(lr, fgen.parameters())
+    lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
+    scheduler.step()
+
+    start_epoch = 1
+    patient = 0
+    best_epoch = 0
+    best_nll = 1e12
+    best_bpd = 1e12
+
+    # number of parameters
+print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
+lr_min = lr / 100
+checkpoint_epochs = 50
+for epoch in range(start_epoch, args.epochs + 1):
     lr = scheduler.get_lr()[0]
     train(epoch)
     print('-' * 50)
@@ -225,7 +240,6 @@ for epoch in range(1, args.epochs + 1):
             nll = sum(nlls) / test_itr
             bits_per_pixel = sum(bits_per_pixels) / test_itr
             print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
-            reconstruct()
         if nll < best_nll:
             patient = 0
             torch.save(fgen.state_dict(), model_name)
@@ -239,11 +253,21 @@ for epoch in range(1, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
+    if epoch % checkpoint_epochs == 0:
+        checkpoint = {'epoch': epoch + 1,
+                      'optimizer': optimizer.state_dict(),
+                      'scheduler': scheduler.state_dict(),
+                      'best_epoch': best_epoch,
+                      'best_nll': best_nll,
+                      'best_bpd': best_bpd,
+                      'patient': patient}
+        torch.save(checkpoint, checkpoint_name)
+
     if epoch == warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
 
-    # if lr < lr_min:
-    #     break
+    if lr < lr_min:
+        break
 
 fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():

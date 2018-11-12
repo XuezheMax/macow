@@ -1,3 +1,4 @@
+import os
 import scipy.io
 import numpy as np
 
@@ -10,9 +11,12 @@ def load_datasets(dataset, data_path=None):
         return load_omniglot()
     elif dataset == 'mnist':
         return load_mnist()
-    elif dataset.startswith('lsun'):
-        category = dataset[5:]
-        return load_lsun(data_path, category)
+    elif dataset.startswith('lsun64'):
+        category = dataset[7:]
+        return load_lsun64(data_path, category)
+    elif dataset.startswith('lsun128'):
+        category = dataset[8:]
+        return load_lsun128(data_path, category)
     elif dataset == 'cifar10':
         return load_cifar10()
     else:
@@ -36,8 +40,7 @@ def load_omniglot():
     test_label = torch.from_numpy(test_label).long()
 
     return [(train_data[i], train_label[i]) for i in range(len(train_data))], \
-           [(test_data[i], test_label[i]) for i in range(len(test_data))], \
-           2345
+           [(test_data[i], test_label[i]) for i in range(len(test_data))]
 
 
 def load_mnist():
@@ -48,29 +51,41 @@ def load_mnist():
     test_data = test_data.float().div(256).unsqueeze(1)
 
     return [(train_data[i], train_label[i]) for i in range(len(train_data))], \
-           [(test_data[i], test_label[i]) for i in range(len(test_data))], \
-           2000
+           [(test_data[i], test_label[i]) for i in range(len(test_data))]
 
 
-def load_lsun(data_path, category):
+def load_lsun64(data_path, category):
     imageSize = 64
     train_data = datasets.LSUN(data_path, classes=[category + '_train'],
                                transform=transforms.Compose([
-                                   transforms.Resize(96),
+                                   transforms.Resize((96, 96)),
                                    transforms.RandomCrop(imageSize),
                                    transforms.ToTensor(),
-                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                ]))
 
     val_data = datasets.LSUN(data_path, classes=[category + '_val'],
                              transform=transforms.Compose([
-                                 transforms.Resize(96),
+                                 transforms.Resize((96, 96)),
                                  transforms.RandomCrop(imageSize),
                                  transforms.ToTensor(),
-                                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                              ]))
+    return train_data, val_data
 
-    return train_data, val_data, 4000
+
+def load_lsun128(data_path, category):
+    imageSize = 128
+    train_data = datasets.LSUN(data_path, classes=[category + '_train'],
+                               transform=transforms.Compose([
+                                   transforms.Resize((imageSize, imageSize)),
+                                   transforms.ToTensor(),
+                               ]))
+
+    val_data = datasets.LSUN(data_path, classes=[category + '_val'],
+                             transform=transforms.Compose([
+                                 transforms.Resize((imageSize, imageSize)),
+                                 transforms.ToTensor(),
+                             ]))
+    return train_data, val_data
 
 
 def load_cifar10():
@@ -88,6 +103,18 @@ def load_cifar10():
                                      transforms.ToTensor()
                                  ]))
     return train_data, test_data
+
+
+def load_imagenet(data_path):
+    train_data = datasets.ImageFolder(os.path.join(data_path, 'train'),
+                                      transform=transforms.Compose([
+                                          transforms.ToTensor()
+                                      ]))
+    val_data = datasets.ImageFolder(os.path.join(data_path, 'val'),
+                                      transform=transforms.Compose([
+                                          transforms.ToTensor()
+                                      ]))
+    return train_data, val_data
 
 
 def get_batch(data, indices):
