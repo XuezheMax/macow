@@ -220,12 +220,12 @@ else:
     best_nll = 1e12
     best_bpd = 1e12
 
-    # number of parameters
+# number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 lr_min = lr / 100
+lr = scheduler.get_lr()[0]
 checkpoint_epochs = 50
 for epoch in range(start_epoch, args.epochs + 1):
-    lr = scheduler.get_lr()[0]
     train(epoch)
     print('-' * 50)
     if epoch < 11 or (epoch < 1000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
@@ -266,6 +266,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     if epoch == warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
 
+    lr = scheduler.get_lr()[0]
     if lr < lr_min:
         break
 
