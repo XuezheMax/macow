@@ -181,16 +181,18 @@ warmups = args.warmup_epochs
 step_decay = 0.999995
 
 if args.recover:
-    fgen = FlowGenModel.load(model_path, device)
-    checkpoint = torch.load(checkpoint_name)
+    params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
+    fgen = FlowGenModel.from_params(params).to(device)
     optimizer = get_optimizer(lr, fgen.parameters())
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=-1)
 
+    checkpoint = torch.load(checkpoint_name)
     start_epoch = checkpoint['epoch']
     patient = checkpoint['patient']
     best_epoch = checkpoint['best_epoch']
     best_nll = checkpoint['best_nll']
     best_bpd = checkpoint['best_bpd']
+    fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
 else:
@@ -253,8 +255,9 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    if epoch % checkpoint_epochs == 0:
+    if epoch % checkpoint_epochs == 0 or patient == 0:
         checkpoint = {'epoch': epoch + 1,
+                      'model': fgen.state_dict(),
                       'optimizer': optimizer.state_dict(),
                       'scheduler': scheduler.state_dict(),
                       'best_epoch': best_epoch,
