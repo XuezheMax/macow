@@ -258,6 +258,7 @@ for epoch in range(start_epoch, args.epochs + 1):
             nll = sum(nlls) / test_itr
             bits_per_pixel = sum(bits_per_pixels) / test_itr
             print('Avg  NLL: {:.2f}, BPD: {:.2f}'.format(nll, bits_per_pixel))
+
         if nll < best_nll:
             patient = 0
             torch.save(fgen.state_dict(), model_name)
@@ -266,8 +267,9 @@ for epoch in range(start_epoch, args.epochs + 1):
             best_nll = nll
             best_bpd = bits_per_pixel
 
-            reconstruct()
-            sample()
+            with torch.no_grad():
+                reconstruct()
+                sample()
         else:
             patient += 1
 
@@ -298,3 +300,4 @@ with torch.no_grad():
     eval(test_data, test_index)
     print('-' * 50)
     reconstruct()
+    sample()
