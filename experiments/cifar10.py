@@ -255,7 +255,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.2f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    if epoch % checkpoint_epochs == 0 or patient == 0:
+    if epoch % checkpoint_epochs == 0 or epoch > 1 and patient == 0:
         checkpoint = {'epoch': epoch + 1,
                       'model': fgen.state_dict(),
                       'optimizer': optimizer.state_dict(),
