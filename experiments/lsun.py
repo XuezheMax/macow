@@ -242,7 +242,7 @@ else:
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
-checkpoint_epochs = 50
+checkpoint_epochs = 5
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
