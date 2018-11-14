@@ -194,7 +194,7 @@ betas = (0.9, polyak_decay)
 eps = 1e-8
 lr = args.lr
 warmups = args.warmup_epochs
-step_decay = 0.999995
+step_decay = 0.999998
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
