@@ -74,8 +74,8 @@ class FlowGenModel(nn.Module):
         # [batch, x_shape] --> [batch, numels]
         z = z.view(z.size(0), -1)
         # [batch]
-        log_probs = z.norm(p=2, dim=1).mul(-0.5) - math.log(math.pi * 2.) * 0.5 * z.size(1)
-        return log_probs + logdet
+        log_probs = z.mul(z).sum(dim=1) + math.log(math.pi * 2.)* z.size(1)
+        return log_probs.mul(-0.5) + logdet
 
     @classmethod
     def from_params(cls, params: Dict) -> "FlowGenModel":
