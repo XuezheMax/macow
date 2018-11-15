@@ -120,7 +120,7 @@ def train(epoch):
             sys.stdout.write("\b" * num_back)
             train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.3f}'.format(
+            log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.4f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * num_insts / len(train_index), train_nll, bits_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
@@ -131,7 +131,7 @@ def train(epoch):
     sys.stdout.write("\b" * num_back)
     train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
     bits_per_pixel = train_nll / (nx * np.log(2.0))
-    print('Average NLL: {:.2f}, BPD: {:.3f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
+    print('Average NLL: {:.2f}, BPD: {:.4f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
 
 
 def eval(eval_data, eval_index):
@@ -150,7 +150,7 @@ def eval(eval_data, eval_index):
     test_nll = test_nll / num_insts + np.log(n_bins / 2.) * nx
     bits_per_pixel = test_nll / (nx * np.log(2.0))
 
-    print('NLL: {:.2f}, BPD: {:.3f}'.format(test_nll, bits_per_pixel))
+    print('NLL: {:.2f}, BPD: {:.4f}'.format(test_nll, bits_per_pixel))
     return test_nll, bits_per_pixel
 
 
@@ -257,7 +257,7 @@ for epoch in range(start_epoch, args.epochs + 1):
                 bits_per_pixels.append(bits_per_pixel)
             nll = sum(nlls) / test_itr
             bits_per_pixel = sum(bits_per_pixels) / test_itr
-            print('Avg  NLL: {:.2f}, BPD: {:.3f}'.format(nll, bits_per_pixel))
+            print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
 
         if nll < best_nll:
             patient = 0
@@ -273,7 +273,7 @@ for epoch in range(start_epoch, args.epochs + 1):
         else:
             patient += 1
 
-    print('Best NLL: {:.2f}, BPD: {:.3f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
+    print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
     if epoch % checkpoint_epochs == 0 or epoch > 1 and patient == 0:
