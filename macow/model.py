@@ -71,10 +71,11 @@ class FlowGenModel(nn.Module):
         """
         # [batch, x_shape]
         z, logdet = self.encode(x)
-        log_probs = z.pow(2) + math.log(math.pi * 2.)
-        # [batch, x_shape] --> [batch, numels] -- > [batch]
-        log_probs = log_probs.view(z.size(0), -1).sum(dim=1) * -0.5 + logdet
-        return log_probs
+        # [batch, x_shape] --> [batch, numels]
+        z = z.view(z.size(0), -1)
+        # [batch]
+        log_probs = z.norm(p=2, dim=1).mul(-0.5) - math.log(math.pi * 2.) * 0.5 * z.size(1)
+        return log_probs + logdet
 
     @classmethod
     def from_params(cls, params: Dict) -> "FlowGenModel":
