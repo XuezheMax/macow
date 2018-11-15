@@ -27,7 +27,6 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='in
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
-parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate the model (default: 50)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
@@ -216,7 +215,7 @@ else:
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
     fgen = FlowGenModel.from_params(params).to(device)
     # initialize
-    init_batch_size = 2048
+    init_batch_size = 1024
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
     init_data = preprocess(init_data, n_bits, True).to(device)
@@ -246,32 +245,31 @@ checkpoint_epochs = 5
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
-    if epoch < 11 or (epoch < 1000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
+    with torch.no_grad():
+        test_itr = 5
+        nlls = []
+        bits_per_pixels = []
+        for _ in range(test_itr):
+            nll, bits_per_pixel = eval(test_data, test_index)
+            nlls.append(nll)
+            bits_per_pixels.append(bits_per_pixel)
+        nll = sum(nlls) / test_itr
+        bits_per_pixel = sum(bits_per_pixels) / test_itr
+        print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
+
+    if nll < best_nll:
+        patient = 0
+        torch.save(fgen.state_dict(), model_name)
+
+        best_epoch = epoch
+        best_nll = nll
+        best_bpd = bits_per_pixel
+
         with torch.no_grad():
-            test_itr = 5
-            nlls = []
-            bits_per_pixels = []
-            for _ in range(test_itr):
-                nll, bits_per_pixel = eval(test_data, test_index)
-                nlls.append(nll)
-                bits_per_pixels.append(bits_per_pixel)
-            nll = sum(nlls) / test_itr
-            bits_per_pixel = sum(bits_per_pixels) / test_itr
-            print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
-
-        if nll < best_nll:
-            patient = 0
-            torch.save(fgen.state_dict(), model_name)
-
-            best_epoch = epoch
-            best_nll = nll
-            best_bpd = bits_per_pixel
-
-            with torch.no_grad():
-                reconstruct()
-                sample()
-        else:
-            patient += 1
+            reconstruct()
+            sample()
+    else:
+        patient += 1
 
     print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
