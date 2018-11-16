@@ -12,10 +12,11 @@ import numpy as np
 
 import torch
 from torch import optim
+from torch.utils.data.dataloader import DataLoader
 from torchvision.utils import save_image
 from torch.nn.utils import clip_grad_norm_
 
-from macow.data import load_datasets, iterate_minibatches, get_batch, preprocess, postprocess
+from macow.data import load_datasets, get_batch, preprocess, postprocess
 from macow.model import FlowGenModel
 from macow.utils import exponentialMovingAverage
 
@@ -24,6 +25,7 @@ parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
 parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 128)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
+parser.add_argument('--workers', default=8, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
@@ -68,9 +70,10 @@ train_data, test_data = load_datasets(dataset, args.data_path)
 
 train_index = np.arange(len(train_data))
 np.random.shuffle(train_index)
-
 test_index = np.arange(len(test_data))
-np.random.shuffle(test_index)
+
+train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=300, shuffle=False, num_workers=args.workers, pin_memory=True)
 
 print(len(train_index))
 print(len(test_index))
@@ -94,8 +97,8 @@ def train(epoch):
 
     num_back = 0
     start_time = time.time()
-    for batch_idx, (data, _) in enumerate(iterate_minibatches(train_data, train_index, args.batch_size, True)):
-        data = preprocess(data.to(device), n_bits, True)
+    for batch_idx, (data, _) in enumerate(train_loader):
+        data = preprocess(data.to(device, non_blocking=True), n_bits, True)
 
         batch_size = len(data)
         optimizer.zero_grad()
@@ -132,12 +135,12 @@ def train(epoch):
     print('Average NLL: {:.2f}, BPD: {:.4f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
 
 
-def eval(eval_data, eval_index):
+def eval(data_loader):
     fgen.eval()
     test_nll = 0
     num_insts = 0
-    for i, (data, _) in enumerate(iterate_minibatches(eval_data, eval_index, 500, False)):
-        data = preprocess(data.to(device), n_bits, True)
+    for i, (data, _) in enumerate(data_loader):
+        data = preprocess(data.to(device, non_blocking=True), n_bits, True)
 
         batch_size = len(data)
         log_probs = fgen.log_probability(data)
@@ -152,10 +155,11 @@ def eval(eval_data, eval_index):
     return test_nll, bits_per_pixel
 
 
-def reconstruct():
+def reconstruct(epoch):
     print('reconstruct')
     fgen.eval()
-    n = 128
+    n = 64
+    np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
     img = preprocess(img.to(device), n_bits, False)
 
@@ -170,18 +174,18 @@ def reconstruct():
     comparison = torch.cat([img, img_recon], dim=0).cpu()
     reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(2)] for i in range(n)])).view(-1)
     comparison = comparison[reorder_index]
-    image_file = 'reconstruct.png'
+    image_file = 'reconstruct{}.png'.format(epoch)
     save_image(comparison, os.path.join(result_path, image_file), nrow=16)
 
 
-def sample():
+def sample(epoch):
     print('sampling')
     fgen.eval()
     n = 256
     z = torch.randn(n, 3, imageSize, imageSize).to(device)
     img, _ = fgen.decode(z)
     img = postprocess(img, n_bits)
-    image_file = 'sample.png'
+    image_file = 'sample{}.png'.format(epoch)
     save_image(img, os.path.join(result_path, image_file), nrow=16)
 
 
@@ -249,7 +253,7 @@ for epoch in range(start_epoch, args.epochs + 1):
         nlls = []
         bits_per_pixels = []
         for _ in range(test_itr):
-            nll, bits_per_pixel = eval(test_data, test_index)
+            nll, bits_per_pixel = eval(test_loader)
             nlls.append(nll)
             bits_per_pixels.append(bits_per_pixel)
         nll = sum(nlls) / test_itr
@@ -265,8 +269,8 @@ for epoch in range(start_epoch, args.epochs + 1):
         best_bpd = bits_per_pixel
 
         with torch.no_grad():
-            reconstruct()
-            sample()
+            reconstruct(epoch)
+            sample(epoch)
     else:
         patient += 1
 
@@ -294,7 +298,7 @@ for epoch in range(start_epoch, args.epochs + 1):
 fgen.load_state_dict(torch.load(model_name))
 with torch.no_grad():
     print('Final test:')
-    eval(test_data, test_index)
+    eval(test_loader)
     print('-' * 50)
-    reconstruct()
-    sample()
+    reconstruct('final')
+    sample('final')
