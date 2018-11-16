@@ -19,7 +19,6 @@ from macow.data import load_datasets, iterate_minibatches, get_batch, preprocess
 from macow.model import FlowGenModel
 from macow.utils import exponentialMovingAverage
 
-
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
@@ -241,7 +240,6 @@ else:
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
-checkpoint_epochs = 5
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
@@ -274,16 +272,15 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    if epoch % checkpoint_epochs == 0 or epoch > 1 and patient == 0:
-        checkpoint = {'epoch': epoch + 1,
-                      'model': fgen.state_dict(),
-                      'optimizer': optimizer.state_dict(),
-                      'scheduler': scheduler.state_dict(),
-                      'best_epoch': best_epoch,
-                      'best_nll': best_nll,
-                      'best_bpd': best_bpd,
-                      'patient': patient}
-        torch.save(checkpoint, checkpoint_name)
+    checkpoint = {'epoch': epoch + 1,
+                  'model': fgen.state_dict(),
+                  'optimizer': optimizer.state_dict(),
+                  'scheduler': scheduler.state_dict(),
+                  'best_epoch': best_epoch,
+                  'best_nll': best_nll,
+                  'best_bpd': best_bpd,
+                  'patient': patient}
+    torch.save(checkpoint, checkpoint_name)
 
     if epoch == warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
