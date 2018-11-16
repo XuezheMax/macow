@@ -277,7 +277,12 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    if epoch > warmups:
+    if epoch == warmups:
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
+
+    lr = scheduler.get_lr()[0]
+
+    if epoch >= warmups:
         checkpoint = {'epoch': epoch + 1,
                       'model': fgen.state_dict(),
                       'optimizer': optimizer.state_dict(),
@@ -288,10 +293,6 @@ for epoch in range(start_epoch, args.epochs + 1):
                       'patient': patient}
         torch.save(checkpoint, checkpoint_name)
 
-    if epoch == warmups:
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
-
-    lr = scheduler.get_lr()[0]
     if lr < lr_min:
         break
 
