@@ -245,7 +245,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
     with torch.no_grad():
-        test_itr = 5
+        test_itr = 10
         nlls = []
         bits_per_pixels = []
         for _ in range(test_itr):
@@ -273,15 +273,16 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
     print('=' * 50)
 
-    checkpoint = {'epoch': epoch + 1,
-                  'model': fgen.state_dict(),
-                  'optimizer': optimizer.state_dict(),
-                  'scheduler': scheduler.state_dict(),
-                  'best_epoch': best_epoch,
-                  'best_nll': best_nll,
-                  'best_bpd': best_bpd,
-                  'patient': patient}
-    torch.save(checkpoint, checkpoint_name)
+    if epoch > warmups:
+        checkpoint = {'epoch': epoch + 1,
+                      'model': fgen.state_dict(),
+                      'optimizer': optimizer.state_dict(),
+                      'scheduler': scheduler.state_dict(),
+                      'best_epoch': best_epoch,
+                      'best_nll': best_nll,
+                      'best_bpd': best_bpd,
+                      'patient': patient}
+        torch.save(checkpoint, checkpoint_name)
 
     if epoch == warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
