@@ -46,6 +46,8 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
+torch.backends.cudnn.benchmark = True
+
 dataset = 'cifar10'
 imageSize = 32
 nc = 3

@@ -47,6 +47,8 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
+torch.backends.cudnn.benchmark = True
+
 imageSize = args.image_size
 assert imageSize in [64, 128]
 category = args.category
