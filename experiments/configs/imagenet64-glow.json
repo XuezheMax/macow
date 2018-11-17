@@ -1,0 +1,11 @@
+{
+  "flow": {
+    "type": "glow",
+    "levels": 4,
+    "num_steps": [48, 48, 48, 48],
+    "in_channels": 3,
+    "dropout": 0.0,
+    "inverse": true
+  },
+  "ngpu": 4
+}

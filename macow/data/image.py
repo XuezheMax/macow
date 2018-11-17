@@ -19,6 +19,8 @@ def load_datasets(dataset, data_path=None):
         return load_lsun128(data_path, category)
     elif dataset == 'cifar10':
         return load_cifar10()
+    elif dataset == 'imagenet':
+        return load_imagenet(data_path)
     else:
         raise ValueError('unknown data set %s' % dataset)
 
