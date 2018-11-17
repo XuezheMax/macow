@@ -248,7 +248,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
     with torch.no_grad():
-        test_itr = 10
+        test_itr = 3
         nlls = []
         bits_per_pixels = []
         for _ in range(test_itr):
