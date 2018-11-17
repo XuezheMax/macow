@@ -27,7 +27,7 @@ parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='in
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
-parser.add_argument('--workers', default=8, type=int, metavar='N', help='number of data loading workers (default: 8)')
+parser.add_argument('--workers', default=1, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
