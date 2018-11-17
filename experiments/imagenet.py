@@ -48,7 +48,6 @@ device = torch.device('cuda') if args.cuda else torch.device('cpu')
 
 imageSize = args.image_size
 assert imageSize in [32, 64]
-category = args.category
 dataset = 'imagenet'
 nc = 3
 nx = imageSize * imageSize * nc
