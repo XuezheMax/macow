@@ -20,7 +20,6 @@ from macow.data import load_datasets, get_batch, preprocess, postprocess
 from macow.model import FlowGenModel
 from macow.utils import exponentialMovingAverage
 
-
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
