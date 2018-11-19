@@ -106,7 +106,7 @@ def train(epoch):
         log_probs = fgen.log_probability(data)
         loss = log_probs.mean() * -1.0
         loss.backward()
-        # clip_grad_norm_(fgen.parameters(), 5.0)
+        clip_grad_norm_(fgen.parameters(), 5.0)
         optimizer.step()
         scheduler.step()
         # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
