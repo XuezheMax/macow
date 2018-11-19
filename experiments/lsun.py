@@ -23,7 +23,7 @@ from macow.utils import exponentialMovingAverage
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
-parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 128)')
+parser.add_argument('--batch-size', type=int, default=160, metavar='N', help='input batch size for training (default: 128)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
@@ -221,7 +221,7 @@ else:
     fgen = FlowGenModel.from_params(params).to(device)
     # initialize
     fgen.eval()
-    init_batch_size = 128
+    init_batch_size = 160
     for _ in range(4):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
         init_data, _ = get_batch(train_data, init_index)
