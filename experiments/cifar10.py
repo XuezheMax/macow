@@ -33,6 +33,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='h
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
+parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
 parser.add_argument('--recover', action='store_true', help='recover the model from disk.')
 
@@ -103,7 +104,8 @@ def train(epoch):
         log_probs = fgen.log_probability(data)
         loss = log_probs.mean() * -1.0
         loss.backward()
-        # clip_grad_norm_(fgen.parameters(), 5.0)
+        if grad_clip > 0:
+            clip_grad_norm_(fgen.parameters(), grad_clip)
         optimizer.step()
         scheduler.step()
         # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
@@ -195,6 +197,7 @@ eps = 1e-8
 lr = args.lr
 warmups = args.warmup_epochs
 step_decay = 0.999998
+grad_clip = args.grad_clip
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))

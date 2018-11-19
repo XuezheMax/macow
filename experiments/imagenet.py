@@ -22,7 +22,7 @@ from macow.utils import exponentialMovingAverage
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
-parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 128)')
+parser.add_argument('--batch-size', type=int, default=160, metavar='N', help='input batch size for training (default: 160)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
@@ -33,6 +33,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='h
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
+parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
 parser.add_argument('--data_path', help='path for data file.', default=None)
 parser.add_argument('--recover', action='store_true', help='recover the model from disk.')
@@ -106,7 +107,8 @@ def train(epoch):
         log_probs = fgen.log_probability(data)
         loss = log_probs.mean() * -1.0
         loss.backward()
-        clip_grad_norm_(fgen.parameters(), 5.0)
+        if grad_clip > 0:
+            clip_grad_norm_(fgen.parameters(), grad_clip)
         optimizer.step()
         scheduler.step()
         # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
@@ -198,6 +200,7 @@ eps = 1e-8
 lr = args.lr
 warmups = args.warmup_epochs
 step_decay = 0.999998
+grad_clip = args.grad_clip
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
@@ -220,7 +223,7 @@ else:
     fgen = FlowGenModel.from_params(params).to(device)
     # initialize
     fgen.eval()
-    init_batch_size = 512 if imageSize == 32 else 128
+    init_batch_size = 512 if imageSize == 32 else 160
     for _ in range(4):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
         init_data, _ = get_batch(train_data, init_index)
