@@ -223,8 +223,10 @@ else:
     fgen = FlowGenModel.from_params(params).to(device)
     # initialize
     fgen.eval()
-    init_batch_size = 512 if imageSize == 32 else 160
-    for _ in range(4):
+    init_batch_size = 2048 if imageSize == 32 else 1024
+    init_iter = 1
+    print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
+    for _ in range(init_iter):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
         init_data, _ = get_batch(train_data, init_index)
         init_data = preprocess(init_data, n_bits, True).to(device)
