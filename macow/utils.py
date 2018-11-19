@@ -2,6 +2,7 @@ __author__ = 'max'
 
 from typing import Tuple
 import torch
+from torch._six import inf
 
 
 def norm(p: torch.Tensor, dim: int):
@@ -84,3 +85,19 @@ def logPlusOne(x):
     eps=1e-4
     mask = x.abs().le(eps).type_as(x)
     return x.mul(x.mul(-0.5) + 1.0) * mask + (x + 1.0).log() * (1.0 - mask)
+
+
+def total_grad_norm(parameters, norm_type=2):
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    parameters = list(filter(lambda p: p.grad is not None, parameters))
+    norm_type = float(norm_type)
+    if norm_type == inf:
+        total_norm = max(p.grad.data.abs().max() for p in parameters)
+    else:
+        total_norm = 0
+        for p in parameters:
+            param_norm = p.grad.data.norm(norm_type)
+            total_norm += param_norm.item() ** norm_type
+        total_norm = total_norm ** (1. / norm_type)
+    return total_norm

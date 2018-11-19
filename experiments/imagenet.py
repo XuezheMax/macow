@@ -8,6 +8,7 @@ import time
 import json
 import argparse
 import random
+import math
 import numpy as np
 
 import torch
@@ -18,7 +19,7 @@ from torch.nn.utils import clip_grad_norm_
 
 from macow.data import load_datasets, get_batch, preprocess, postprocess
 from macow.model import FlowGenModel
-from macow.utils import exponentialMovingAverage
+from macow.utils import exponentialMovingAverage, total_grad_norm
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
@@ -95,7 +96,6 @@ def train(epoch):
     fgen.train()
     nll = 0
     num_insts = 0
-    num_batches = 0
 
     num_back = 0
     start_time = time.time()
@@ -108,14 +108,19 @@ def train(epoch):
         loss = log_probs.mean() * -1.0
         loss.backward()
         if grad_clip > 0:
-            clip_grad_norm_(fgen.parameters(), grad_clip)
-        optimizer.step()
-        scheduler.step()
-        # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
+            grad_norm = clip_grad_norm_(fgen.parameters(), grad_clip)
+        else:
+            grad_norm = total_grad_norm(fgen.parameters())
+
+        if math.isnan(grad_norm):
+            print('NaN detected. Skip current step.')
+        else:
+            optimizer.step()
+            scheduler.step()
+            # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
 
         with torch.no_grad():
             num_insts += batch_size
-            num_batches += 1
             nll -= log_probs.sum()
 
         if batch_idx % args.log_interval == 0:
