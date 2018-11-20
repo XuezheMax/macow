@@ -110,15 +110,15 @@ def train(epoch):
             grad_norm = total_grad_norm(fgen.parameters())
 
         if math.isnan(grad_norm):
-            print('NaN detected. Skip current step.')
+            print('\nNaN detected. Skip current step (loss: {}).'.format(loss.item()))
         else:
             optimizer.step()
             scheduler.step()
             # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
 
-        with torch.no_grad():
-            num_insts += batch_size
-            nll -= log_probs.sum()
+            with torch.no_grad():
+                num_insts += batch_size
+                nll -= log_probs.sum()
 
         if batch_idx % args.log_interval == 0:
             sys.stdout.write("\b" * num_back)
@@ -127,7 +127,8 @@ def train(epoch):
             train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.4f}'.format(
-                batch_idx * batch_size, len(train_index), 100. * num_insts / len(train_index), train_nll, bits_per_pixel)
+                batch_idx * batch_size, len(train_index), batch_idx * batch_size / len(train_index),
+                train_nll, bits_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
             num_back = len(log_info)
