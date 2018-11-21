@@ -99,12 +99,10 @@ def train(epoch):
     fgen.train()
     nll = 0
     num_insts = 0
-
     num_back = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
         data = preprocess(data.to(device, non_blocking=True), n_bits, True)
-
         batch_size = len(data)
         optimizer.zero_grad()
         nll_batch = 0
@@ -112,7 +110,7 @@ def train(epoch):
         data_list = data.chunk(batch_steps, dim=0)
         for data in data_list:
             log_probs = fgen.log_probability(data)
-            loss = log_probs.mean() * (-1.0 / batch_steps)
+            loss = log_probs.mean().mul(-1.0 / batch_steps)
             loss.backward()
             with torch.no_grad():
                 nll_batch -= log_probs.sum().item()
