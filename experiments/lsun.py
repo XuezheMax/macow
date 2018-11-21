@@ -25,6 +25,7 @@ parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
 parser.add_argument('--batch-size', type=int, default=160, metavar='N', help='input batch size for training (default: 160)')
+parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
@@ -78,6 +79,7 @@ test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=300, shuffle=False, num_workers=args.workers, pin_memory=True)
+batch_steps = args.batch_steps
 
 print(len(train_index))
 print(len(test_index))
@@ -105,24 +107,30 @@ def train(epoch):
 
         batch_size = len(data)
         optimizer.zero_grad()
-        log_probs = fgen.log_probability(data)
-        loss = log_probs.mean() * -1.0
-        loss.backward()
+        nll_batch = 0
+        loss_batch = 0
+        data_list = data.chunk(batch_steps, dim=0)
+        for data in data_list:
+            log_probs = fgen.log_probability(data)
+            loss = log_probs.mean() * (-1.0 / batch_steps)
+            loss.backward()
+            with torch.no_grad():
+                nll_batch -= log_probs.sum().item()
+                loss_batch += loss.item()
+
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(fgen.parameters(), grad_clip)
         else:
             grad_norm = total_grad_norm(fgen.parameters())
 
         if math.isnan(grad_norm):
-            print('\nNaN detected. Skip current step (loss: {}).'.format(loss.item()))
+            print('\nNaN detected. Skip current step (loss: {}).'.format(loss_batch))
         else:
             optimizer.step()
             scheduler.step()
             # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
-
-            with torch.no_grad():
-                num_insts += batch_size
-                nll -= log_probs.sum()
+            num_insts += batch_size
+            nll += nll_batch
 
         if batch_idx % args.log_interval == 0:
             sys.stdout.write("\b" * num_back)
