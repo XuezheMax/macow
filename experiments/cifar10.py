@@ -127,7 +127,7 @@ def train(epoch):
             train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.4f}'.format(
-                batch_idx * batch_size, len(train_index), batch_idx * batch_size / len(train_index),
+                batch_idx * batch_size, len(train_index), 100 * batch_idx * batch_size / len(train_index),
                 train_nll, bits_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
