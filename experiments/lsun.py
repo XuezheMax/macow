@@ -107,10 +107,10 @@ def train(epoch):
         optimizer.zero_grad()
         nll_batch = 0
         loss_batch = 0
-        data_list = data.chunk(batch_steps, dim=0)
+        data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
         for data in data_list:
             log_probs = fgen.log_probability(data)
-            loss = log_probs.mean().mul(-1.0 / batch_steps)
+            loss = log_probs.mean() * (-1.0 / batch_steps)
             loss.backward()
             with torch.no_grad():
                 nll_batch -= log_probs.sum().item()
