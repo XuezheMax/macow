@@ -68,7 +68,7 @@ def load_lsun64(data_path, category):
     val_data = datasets.LSUN(data_path, classes=[category + '_val'],
                              transform=transforms.Compose([
                                  transforms.Resize((96, 96)),
-                                 transforms.RandomCrop(imageSize),
+                                 transforms.CenterCrop(imageSize),
                                  transforms.ToTensor(),
                              ]))
     return train_data, val_data
