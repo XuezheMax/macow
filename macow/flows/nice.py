@@ -46,10 +46,10 @@ class NICE(Flow):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
-        if hidden_channels is None:
-            hidden_channels = 8 * in_channels
         out_channels = in_channels // 2
         in_channels = in_channels - out_channels
+        if hidden_channels is None:
+            hidden_channels = min(8 * in_channels, 512)
         if scale:
             out_channels = out_channels * 2
         self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, dropout=dropout)
