@@ -113,7 +113,7 @@ class NICE(Flow):
     def init(self, data: torch.Tensor, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, in_channels, H, W]
         z1, z2 = data.chunk(2, dim=1)
-        mu = self.net.init(z1)
+        mu = self.net.init(z1, init_scale=init_scale)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
             z2 = z2.mul(log_scale.exp())

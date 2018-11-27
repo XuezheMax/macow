@@ -93,8 +93,8 @@ def train(epoch):
     fgen.train()
     nll = 0
     num_insts = 0
-
     num_back = 0
+    num_nans = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
         data = preprocess(data.to(device, non_blocking=True), n_bits, True)
@@ -110,7 +110,7 @@ def train(epoch):
             grad_norm = total_grad_norm(fgen.parameters())
 
         if math.isnan(grad_norm):
-            print('\nNaN detected. Skip current step (loss: {}).'.format(loss.item()))
+            num_nans += 1
         else:
             optimizer.step()
             scheduler.step()
@@ -126,8 +126,8 @@ def train(epoch):
             sys.stdout.write("\b" * num_back)
             train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.4f}'.format(
-                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index),
+            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}'.format(
+                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
                 train_nll, bits_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
@@ -145,19 +145,24 @@ def eval(data_loader):
     fgen.eval()
     test_nll = 0
     num_insts = 0
+    num_nans = 0
     for i, (data, _) in enumerate(data_loader):
         data = preprocess(data.to(device, non_blocking=True), n_bits, True)
 
         batch_size = len(data)
         log_probs = fgen.log_probability(data)
+        mask = torch.isnan(log_probs)
+        batch_nans = mask.sum().item()
 
-        num_insts += batch_size
+        num_insts += batch_size - batch_nans
+        num_nans += batch_nans
+        log_probs[mask] = 0.
         test_nll -= log_probs.sum().item()
 
     test_nll = test_nll / num_insts + np.log(n_bins / 2.) * nx
     bits_per_pixel = test_nll / (nx * np.log(2.0))
 
-    print('NLL: {:.2f}, BPD: {:.4f}'.format(test_nll, bits_per_pixel))
+    print('NLL: {:.2f}, BPD: {:.4f}, NaN: {}'.format(test_nll, bits_per_pixel, num_nans))
     return test_nll, bits_per_pixel
 
 
@@ -220,6 +225,18 @@ if args.recover:
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
+
+    with torch.no_grad():
+        test_itr = 5
+        nlls = []
+        bits_per_pixels = []
+        for _ in range(test_itr):
+            nll, bits_per_pixel = eval(test_loader)
+            nlls.append(nll)
+            bits_per_pixels.append(bits_per_pixel)
+        nll = sum(nlls) / test_itr
+        bits_per_pixel = sum(bits_per_pixels) / test_itr
+        print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
 else:
     params = json.load(open(args.config, 'r'))
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)

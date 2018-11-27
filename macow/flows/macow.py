@@ -16,12 +16,12 @@ class MaCowUnit(Flow):
     """
     A Unit of Flows with an MCF(A), MCF(B), an Conv1x1, followd by an ActNorm and an activation.
     """
-    def __init__(self, in_channels, kernel_size, inverse=False):
+    def __init__(self, in_channels, kernel_size, scale=True, inverse=False):
         super(MaCowUnit, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.conv1 = MaskedConvFlow(in_channels, kernel_size, mask_type='A', inverse=inverse)
-        self.conv2 = MaskedConvFlow(in_channels, kernel_size, mask_type='B', inverse=inverse)
+        self.conv1 = MaskedConvFlow(in_channels, kernel_size, order='A', scale=scale, inverse=inverse)
+        self.conv2 = MaskedConvFlow(in_channels, kernel_size, order='B', scale=scale, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -74,7 +74,7 @@ class MaCowStep(Flow):
     def __init__(self, in_channels, kernel_size, hidden_channels, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
         num_units = 2
-        units = [MaCowUnit(in_channels, kernel_size, inverse=inverse) for _ in range(num_units)]
+        units = [MaCowUnit(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
         self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
 

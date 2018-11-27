@@ -100,13 +100,13 @@ def train(epoch):
     nll = 0
     num_insts = 0
     num_back = 0
+    num_nans = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
         data = preprocess(data.to(device, non_blocking=True), n_bits, True)
         batch_size = len(data)
         optimizer.zero_grad()
         nll_batch = 0
-        loss_batch = 0
         data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
         for data in data_list:
             log_probs = fgen.log_probability(data)
@@ -114,7 +114,6 @@ def train(epoch):
             loss.backward()
             with torch.no_grad():
                 nll_batch -= log_probs.sum().item()
-                loss_batch += loss.item()
 
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(fgen.parameters(), grad_clip)
@@ -122,7 +121,7 @@ def train(epoch):
             grad_norm = total_grad_norm(fgen.parameters())
 
         if math.isnan(grad_norm):
-            print('\nNaN detected. Skip current step (loss: {}).'.format(loss_batch))
+            num_nans += 1
         else:
             optimizer.step()
             scheduler.step()
@@ -136,8 +135,8 @@ def train(epoch):
             sys.stdout.write("\b" * num_back)
             train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%)] NLL: {:.2f}, BPD: {:.4f}'.format(
-                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index),
+            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}'.format(
+                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
                 train_nll, bits_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()

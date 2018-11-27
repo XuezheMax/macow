@@ -11,6 +11,7 @@ from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
 from macow.utils import norm
+from macow.nnet.weight_norm import MaskedConv2d, Conv2dWeightNorm
 
 
 class Conv1x1Flow(Flow):
@@ -162,53 +163,212 @@ class Conv1x1WeightNormFlow(Flow):
         return Conv1x1WeightNormFlow(**params)
 
 
+# class MaskedConvFlow(Flow):
+#     """
+#     Masked Convolutional Flow
+#     """
+#
+#     def __init__(self, in_channels, kernel_size, mask_type='A', inverse=False):
+#         super(MaskedConvFlow, self).__init__(inverse)
+#         assert mask_type in {'A', 'B'}, 'unknown mask type: {}'.format(mask_type)
+#         self.in_channels = in_channels
+#         self.kernel_size = _pair(kernel_size)
+#         self.mask_type = mask_type
+#         for k in self.kernel_size:
+#             assert k % 2 == 1, 'kernel cannot include even number: {}'.format(self.kernel_size)
+#         self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
+#
+#         self.weight_v = Parameter(torch.Tensor(in_channels, 1, *self.kernel_size))
+#         self.weight_g = Parameter(torch.Tensor(in_channels, 1, 1, 1))
+#         self.bias = Parameter(torch.Tensor(in_channels))
+#         self.register_buffer('mask', torch.ones(self.kernel_size))
+#         kH, kW = self.kernel_size
+#         mask = np.ones([*self.mask.size()], dtype=np.float32)
+#         mask[kH // 2, kW // 2 + 1:] = 0
+#         mask[kH // 2 + 1:] = 0
+#         # reverse order
+#         if self.mask_type == 'B':
+#             reverse_mask = mask[::-1, :]
+#             reverse_mask = reverse_mask[:, ::-1]
+#             mask = reverse_mask.copy()
+#         self.mask.copy_(torch.from_numpy(mask).float())
+#         self.reset_parameters()
+#
+#     def reset_parameters(self):
+#         nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
+#         with torch.no_grad():
+#             cH = self.kernel_size[0] // 2
+#             cW = self.kernel_size[1] // 2
+#             self.weight_v[:, 0, cH, cW].add_(1.0)
+#         self.weight_v.data.mul_(self.mask)
+#         _norm = norm(self.weight_v, 0).data + 1e-8
+#         self.weight_g.data.copy_(_norm.log())
+#         nn.init.constant_(self.bias, 0)
+#
+#     def compute_weight(self) -> torch.Tensor:
+#         self.weight_v.data.mul_(self.mask)
+#         _norm = norm(self.weight_v, 0) + 1e-8
+#         weight = self.weight_v * (self.weight_g.exp() / _norm)
+#         return weight
+#
+#     @overrides
+#     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """
+#
+#         Args:
+#             input: Tensor
+#                 input tensor [batch, in_channels, H, W]
+#             h: Tensor
+#                 conditional input (default: None)
+#
+#         Returns: out: Tensor , logdet: Tensor
+#             out: [batch, in_channels, H, W], the output of the flow
+#             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+#
+#         """
+#         batch, channels, H, W = input.size()
+#         weight = self.compute_weight()
+#         # [batch, in_channels, H, W]
+#         out = F.conv2d(input, weight, bias=self.bias, padding=self.padding, groups=channels)
+#
+#         cH = self.kernel_size[0] // 2
+#         cW = self.kernel_size[1] // 2
+#         # [in_channels]
+#         logdet = weight[:, 0, cH, cW]
+#         logdet = logdet.abs().log().sum() * H * W
+#         return out, logdet
+#
+#     def backward_A(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+#         kH, kW = self.kernel_size
+#         cH = kH // 2
+#         cW = kW // 2
+#         out = input.new_zeros(input.size())
+#         for i in range(H):
+#             si = max(0, i - cH)
+#             for j in range(W):
+#                 sj = max(0, j - cW)
+#                 tj = min(W, j + cW + 1)
+#                 input_curr = input[:, :, si:i+1, sj:tj]
+#                 out_curr = out[:, :, si:i+1, sj:tj]
+#                 # [batch, channels, cH, cW]
+#                 tmp, _ = self.forward(out_curr, h=h)
+#                 new_out = (input_curr - tmp).div(c_weight)
+#                 out[:, :, i, j] = new_out[:, :, -1, j - sj]
+#         return out
+#
+#     def backward_B(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+#         kH, kW = self.kernel_size
+#         cH = kH // 2
+#         cW = kW // 2
+#         out = input.new_zeros(input.size())
+#         for i in reversed(range(H)):
+#             si = min(H, i + cH + 1)
+#             for j in reversed(range(W)):
+#                 sj = max(0, j - cW)
+#                 tj = min(W, j + cW + 1)
+#                 input_curr = input[:, :, i:si, sj:tj]
+#                 out_curr = out[:, :, i:si, sj:tj]
+#                 # [batch, channels, cH, cW]
+#                 tmp, _ = self.forward(out_curr, h=h)
+#                 new_out = (input_curr - tmp).div(c_weight)
+#                 out[:, :, i, j] = new_out[:, :, 0, j - sj]
+#         return out
+#
+#     @overrides
+#     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+#         """
+#
+#         Args:
+#             input: Tensor
+#                 input tensor [batch, in_channels, H, W]
+#             h: Tensor
+#                 conditional input (default: None)
+#
+#         Returns: out: Tensor , logdet: Tensor
+#             out: [batch, in_channels, H, W], the output of the flow
+#             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+#
+#         """
+#         kH, kW = self.kernel_size
+#         cH = kH // 2
+#         cW = kW // 2
+#         batch, channels, H, W = input.size()
+#
+#         weight = self.compute_weight()
+#         c_weight = weight[:, 0, cH, cW]
+#         logdet = c_weight.abs().log().sum() * H * W * -1.0
+#
+#         # [channels, 1, 1]
+#         c_weight = c_weight.unsqueeze(1).unsqueeze(1)
+#         if self.mask_type == 'A':
+#             out = self.backward_A(input, H, W, c_weight, h=h)
+#         else:
+#             out = self.backward_B(input, H, W, c_weight, h=h)
+#         return out, logdet
+#
+#     @overrides
+#     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+#         with torch.no_grad():
+#             # [batch, n_channels, H, W]
+#             out, _ = self.forward(data, h=h)
+#             n_channels = out.size(1)
+#             out = out.transpose(0, 1).contiguous().view(n_channels, -1)
+#             # [n_channels]
+#             mean = out.mean(dim=1)
+#             std = out.std(dim=1)
+#             inv_stdv = init_scale / (std + 1e-6)
+#             self.weight_g.add_(inv_stdv.log().view(n_channels, 1, 1, 1))
+#             self.bias.add_(-mean).mul_(inv_stdv)
+#             return self.forward(data, h=h)
+#
+#     @overrides
+#     def extra_repr(self):
+#         return 'inverse={}, type={}, in_channels={}, kernel_size={}, padding={}'.format(self.inverse, self.mask_type,
+#                                                                                         self.in_channels, self.kernel_size, self.padding)
+#
+#     @classmethod
+#     def from_params(cls, params: Dict) -> "MaskedConvFlow":
+#         return MaskedConvFlow(**params)
+
+
 class MaskedConvFlow(Flow):
     """
     Masked Convolutional Flow
     """
 
-    def __init__(self, in_channels, kernel_size, mask_type='A', inverse=False):
+    def __init__(self, in_channels, kernel_size, hidden_channels=None, order='A', scale=True, inverse=False):
         super(MaskedConvFlow, self).__init__(inverse)
-        assert mask_type in {'A', 'B'}, 'unknown mask type: {}'.format(mask_type)
+        assert order in {'A', 'B'}, 'unknown order: {}'.format(order)
         self.in_channels = in_channels
+        self.scale = scale
+        if hidden_channels is None:
+            hidden_channels = 4 * in_channels
+        out_channels = in_channels
+        if scale:
+            out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
-        self.mask_type = mask_type
-        for k in self.kernel_size:
-            assert k % 2 == 1, 'kernel cannot include even number: {}'.format(self.kernel_size)
-        self.padding = (self.kernel_size[0] // 2, self.kernel_size[1] // 2)
+        self.order = order
+        self.net = nn.Sequential(
+            MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order),
+            nn.ELU(inplace=True),
+            Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+        )
 
-        self.weight_v = Parameter(torch.Tensor(in_channels, 1, *self.kernel_size))
-        self.weight_g = Parameter(torch.Tensor(in_channels, 1, 1, 1))
-        self.bias = Parameter(torch.Tensor(in_channels))
-        self.register_buffer('mask', torch.ones(self.kernel_size))
-        kH, kW = self.kernel_size
-        mask = np.ones([*self.mask.size()], dtype=np.float32)
-        mask[kH // 2, kW // 2 + 1:] = 0
-        mask[kH // 2 + 1:] = 0
-        # reverse order
-        if self.mask_type == 'B':
-            reverse_mask = mask[::-1, :]
-            reverse_mask = reverse_mask[:, ::-1]
-            mask = reverse_mask.copy()
-        self.mask.copy_(torch.from_numpy(mask).float())
-        self.reset_parameters()
+    def init_net(self, x, h=None, init_scale=1.0):
+        out = self.net[0].init(x, init_scale=init_scale)
+        out = self.net[1](out)
+        mu = self.net[2].init(out, init_scale=0.0)
+        log_scale = None
+        if self.scale:
+            mu, log_scale = mu.chunk(2, dim=1)
+        return mu, log_scale
 
-    def reset_parameters(self):
-        nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
-        with torch.no_grad():
-            cH = self.kernel_size[0] // 2
-            cW = self.kernel_size[1] // 2
-            self.weight_v[:, 0, cH, cW].add_(1.0)
-        self.weight_v.data.mul_(self.mask)
-        _norm = norm(self.weight_v, 0).data + 1e-8
-        self.weight_g.data.copy_(_norm.log())
-        nn.init.constant_(self.bias, 0)
-
-    def compute_weight(self) -> torch.Tensor:
-        self.weight_v.data.mul_(self.mask)
-        _norm = norm(self.weight_v, 0) + 1e-8
-        weight = self.weight_v * (self.weight_g.exp() / _norm)
-        return weight
+    def calc_mu_and_scale(self, input: torch.Tensor, h=None):
+        mu = self.net(input)
+        log_scale = None
+        if self.scale:
+            mu, log_scale = mu.chunk(2, dim=1)
+        return mu, log_scale
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -225,23 +385,23 @@ class MaskedConvFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        batch, channels, H, W = input.size()
-        weight = self.compute_weight()
-        # [batch, in_channels, H, W]
-        out = F.conv2d(input, weight, bias=self.bias, padding=self.padding, groups=channels)
-
-        cH = self.kernel_size[0] // 2
-        cW = self.kernel_size[1] // 2
-        # [in_channels]
-        logdet = weight[:, 0, cH, cW]
-        logdet = logdet.abs().log().sum() * H * W
+        mu, log_scale = self.calc_mu_and_scale(input, h=h)
+        out = input
+        if self.scale:
+            out = out.mul(log_scale.exp())
+            logdet = log_scale.view(mu.size(0), -1).sum(dim=1)
+        else:
+            logdet = mu.new_zeros(mu.size(0))
+        out = out + mu
         return out, logdet
 
-    def backward_A(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+    def backward_A(self, input: torch.Tensor, h=None) -> torch.Tensor:
+        batch, channels, H, W = input.size()
+        out = input.new_zeros(batch, channels, H, W)
+
         kH, kW = self.kernel_size
         cH = kH // 2
         cW = kW // 2
-        out = input.new_zeros(input.size())
         for i in range(H):
             si = max(0, i - cH)
             for j in range(W):
@@ -250,16 +410,20 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, si:i+1, sj:tj]
                 out_curr = out[:, :, si:i+1, sj:tj]
                 # [batch, channels, cH, cW]
-                tmp, _ = self.forward(out_curr, h=h)
-                new_out = (input_curr - tmp).div(c_weight)
+                mu, log_scale = self.calc_mu_and_scale(out_curr, h=h)
+                new_out = input_curr - mu
+                if self.scale:
+                    new_out = new_out.div(log_scale.exp() + 1e-12)
                 out[:, :, i, j] = new_out[:, :, -1, j - sj]
         return out
 
-    def backward_B(self, input: torch.Tensor, H, W, c_weight: torch.Tensor, h=None) -> torch.Tensor:
+    def backward_B(self, input: torch.Tensor, h=None) -> torch.Tensor:
+        batch, channels, H, W = input.size()
+        out = input.new_zeros(batch, channels, H, W)
+
         kH, kW = self.kernel_size
         cH = kH // 2
         cW = kW // 2
-        out = input.new_zeros(input.size())
         for i in reversed(range(H)):
             si = min(H, i + cH + 1)
             for j in reversed(range(W)):
@@ -268,8 +432,10 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, i:si, sj:tj]
                 out_curr = out[:, :, i:si, sj:tj]
                 # [batch, channels, cH, cW]
-                tmp, _ = self.forward(out_curr, h=h)
-                new_out = (input_curr - tmp).div(c_weight)
+                mu, log_scale = self.calc_mu_and_scale(out_curr, h=h)
+                new_out = input_curr - mu
+                if self.scale:
+                    new_out = new_out.div(log_scale.exp() + 1e-12)
                 out[:, :, i, j] = new_out[:, :, 0, j - sj]
         return out
 
@@ -288,42 +454,24 @@ class MaskedConvFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        kH, kW = self.kernel_size
-        cH = kH // 2
-        cW = kW // 2
-        batch, channels, H, W = input.size()
-
-        weight = self.compute_weight()
-        c_weight = weight[:, 0, cH, cW]
-        logdet = c_weight.abs().log().sum() * H * W * -1.0
-
-        # [channels, 1, 1]
-        c_weight = c_weight.unsqueeze(1).unsqueeze(1)
-        if self.mask_type == 'A':
-            out = self.backward_A(input, H, W, c_weight, h=h)
+        if self.order == 'A':
+            out = self.backward_A(input, h=h)
         else:
-            out = self.backward_B(input, H, W, c_weight, h=h)
-        return out, logdet
+            out = self.backward_B(input, h=h)
+        _, logdet = self.forward(out, h=h)
+        return out, logdet.mul(-1.0)
 
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            # [batch, n_channels, H, W]
-            out, _ = self.forward(data, h=h)
-            n_channels = out.size(1)
-            out = out.transpose(0, 1).contiguous().view(n_channels, -1)
-            # [n_channels]
-            mean = out.mean(dim=1)
-            std = out.std(dim=1)
-            inv_stdv = init_scale / (std + 1e-6)
-            self.weight_g.add_(inv_stdv.log().view(n_channels, 1, 1, 1))
-            self.bias.add_(-mean).mul_(inv_stdv)
-            return self.forward(data, h=h)
-
-    @overrides
-    def extra_repr(self):
-        return 'inverse={}, type={}, in_channels={}, kernel_size={}, padding={}'.format(self.inverse, self.mask_type,
-                                                                                        self.in_channels, self.kernel_size, self.padding)
+        mu, log_scale = self.init_net(data, h=h, init_scale=init_scale)
+        out = data
+        if self.scale:
+            out = out.mul(log_scale.exp())
+            logdet = log_scale.view(mu.size(0), -1).sum(dim=1)
+        else:
+            logdet = mu.new_zeros(mu.size(0))
+        out = out + mu
+        return out, logdet
 
     @classmethod
     def from_params(cls, params: Dict) -> "MaskedConvFlow":
