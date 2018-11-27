@@ -216,7 +216,7 @@ class MaskedConv2d(nn.Module):
                         self.padding, self.dilation, self.groups)
 
     def extra_repr(self):
-        s = ('{in_channels} ({masked_channels}), {out_channels}, kernel_size={kernel_size}'
+        s = ('{in_channels}({masked_channels}), {out_channels}, kernel_size={kernel_size}'
              ', stride={stride}')
         if self.padding != (0,) * len(self.padding):
             s += ', padding={padding}'
