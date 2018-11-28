@@ -23,7 +23,7 @@ from macow.utils import exponentialMovingAverage, total_grad_norm
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
-parser.add_argument('--batch-size', type=int, default=160, metavar='N', help='input batch size for training (default: 160)')
+parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
