@@ -192,12 +192,11 @@ class MaCowInternalBlock(Flow):
     """
     Masked Convolution Flow Internal Block (squeeze at beginning and split at end)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, scale=True, inverse=False, dropout=0.0):
         super(MaCowInternalBlock, self).__init__(inverse)
-        hidden_channels = 512
         steps = [MaCowStep(in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
-        self.prior = NICE(in_channels, scale=True, inverse=inverse)
+        self.prior = NICE(in_channels, hidden_channels=hidden_channels, scale=True, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -253,7 +252,9 @@ class MaCow(Flow):
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, scale=scale, inverse=inverse, dropout=dropout)
+                half = levels // 2
+                hidden_channels = 256 if level < half else 512
+                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
                 in_channels = in_channels // 2
         self.blocks = nn.ModuleList(blocks)
