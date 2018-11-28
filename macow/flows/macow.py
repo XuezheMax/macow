@@ -10,6 +10,7 @@ from macow.flows.actnorm import ActNorm2dFlow
 from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
+from macow.flows.glow import GlowStep
 
 
 class MaCowUnit(Flow):
@@ -76,7 +77,8 @@ class MaCowStep(Flow):
         num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
-        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        # self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
