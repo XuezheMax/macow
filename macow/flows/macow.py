@@ -252,7 +252,7 @@ class MaCow(Flow):
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                half = levels // 2
+                half = levels / 2
                 hidden_channels = 256 if level < half else 512
                 macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
