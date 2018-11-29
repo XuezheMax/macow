@@ -25,32 +25,35 @@ class MaCowUnit(Flow):
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        # ActNorm
         out, logdet_accum = self.actnorm.forward(input, h=h)
-
+        # MCF1
         out, logdet = self.conv1.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
-
+        # MCF2
         out, logdet = self.conv2.forward(out, h=h)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        # MCF2
         out, logdet_accum = self.conv2.backward(input, h=h)
-
+        # MCF1
         out, logdet = self.conv1.backward(out, h=h)
         logdet_accum = logdet_accum + logdet
-
+        # ActNorm
         out, logdet = self.actnorm.backward(out, h=h)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        # ActNorm
         out, logdet_accum = self.actnorm.init(data, h=h, init_scale=init_scale)
-
+        # MCF1
         out, logdet = self.conv1.init(out, h=h, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
-
+        # MCF2
         out, logdet = self.conv2.init(out, h=h, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
@@ -66,16 +69,16 @@ class MaCowStep(Flow):
     """
     def __init__(self, in_channels, kernel_size, hidden_channels, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
+        self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
         num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
-        # self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
-        self.coupling = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        # self.coupling = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = input.new_zeros(input.size(0))
-        out = input
+        out, logdet_accum = self.conv1x1.forward(input, h=h)
         for unit in self.units:
             out, logdet = unit.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
@@ -89,12 +92,13 @@ class MaCowStep(Flow):
         for unit in reversed(self.units):
             out, logdet = unit.backward(out, h=h)
             logdet_accum = logdet_accum + logdet
+        out, logdet = self.conv1x1.backward(out, h=h)
+        logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        logdet_accum = data.new_zeros(data.size(0))
-        out = data
+        out, logdet_accum = self.conv1x1.init(data, h=h, init_scale=init_scale)
         for unit in self.units:
             out, logdet = unit.init(out, h=h, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
