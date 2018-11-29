@@ -4,6 +4,7 @@ from overrides import overrides
 from typing import Tuple, Dict
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from macow.flows.flow import Flow
 from macow.nnet import Conv2dWeightNorm
@@ -15,29 +16,24 @@ class ResNetBlock(nn.Module):
         self.conv1 = Conv2dWeightNorm(in_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
-        self.downsample = Conv2dWeightNorm(in_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.dropout = nn.Dropout(dropout)
 
     def init(self, x, init_scale=1.0):
-        residual = self.downsample.init(x, init_scale=0.0)
-
         out = self.activation(self.conv1.init(x, init_scale=init_scale))
 
         out = self.activation(self.conv2.init(out, init_scale=init_scale))
 
         out = self.conv3.init(self.dropout(out), init_scale=0.0)
 
-        return out + residual
+        return out
 
     def forward(self, x):
-        residual = self.downsample(x)
-
         out = self.activation(self.conv1(x))
 
         out = self.activation(self.conv2(out))
 
-        out = self.conv3(self.dropout(out)) + residual
+        out = self.conv3(self.dropout(out))
         return out
 
 
@@ -74,8 +70,9 @@ class NICE(Flow):
         mu = self.net(z1)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            z2 = z2.mul(log_scale.exp())
-            logdet = log_scale.view(z1.size(0), -1).sum(dim=1)
+            scale = log_scale.add_(2.).sigmoid_()
+            z2 = z2.mul(scale)
+            logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:
             logdet = z1.new_zeros(z1.size(0))
         z2 = z2 + mu
@@ -101,8 +98,9 @@ class NICE(Flow):
         mu = self.net(z1)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            z2 = (z2 - mu).div(log_scale.exp() + 1e-12)
-            logdet = log_scale.view(z1.size(0), -1).sum(dim=1) * -1.0
+            scale = log_scale.add_(2.).sigmoid_()
+            z2 = (z2 - mu).div(scale + 1e-12)
+            logdet = scale.log().view(z1.size(0), -1).sum(dim=1) * -1.0
         else:
             z2 = z2 - mu
             logdet = z1.new_zeros(z1.size(0))
@@ -116,8 +114,9 @@ class NICE(Flow):
         mu = self.net.init(z1, init_scale=init_scale)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            z2 = z2.mul(log_scale.exp())
-            logdet = log_scale.view(z1.size(0), -1).sum(dim=1)
+            scale = log_scale.add_(2.).sigmoid_()
+            z2 = z2.mul(scale)
+            logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:
             logdet = z1.new_zeros(z1.size(0))
         z2 = z2 + mu
