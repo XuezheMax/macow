@@ -77,8 +77,8 @@ class MaCowStep(Flow):
         num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
-        # self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
-        self.coupling = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        # self.coupling = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
