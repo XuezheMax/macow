@@ -71,7 +71,8 @@ class MaCowStep(Flow):
             out, logdet = unit.forward(out, h=h)
             logdet_accum = logdet_accum + logdet
 
-        out, logdet_accum = self.coupling.forward(out, h=h)
+        out, logdet = self.coupling.forward(out, h=h)
+        logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
