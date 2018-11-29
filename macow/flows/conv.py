@@ -190,17 +190,19 @@ class MaskedConvFlow(Flow):
         out = self.net[0].init(x, init_scale=init_scale)
         out = self.net[1](out)
         mu = self.net[2].init(out, init_scale=0.0)
-        log_scale = None
+        scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-        return mu, log_scale
+            scale = log_scale.add_(2.).sigmoid_()
+        return mu, scale
 
     def calc_mu_and_scale(self, input: torch.Tensor, h=None):
         mu = self.net(input)
-        log_scale = None
+        scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-        return mu, log_scale
+            scale = log_scale.add_(2.).sigmoid_()
+        return mu, scale
 
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -217,11 +219,11 @@ class MaskedConvFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        mu, log_scale = self.calc_mu_and_scale(input, h=h)
+        mu, scale = self.calc_mu_and_scale(input, h=h)
         out = input
         if self.scale:
-            out = out.mul(log_scale.exp())
-            logdet = log_scale.view(mu.size(0), -1).sum(dim=1)
+            out = out.mul(scale)
+            logdet = scale.log().view(mu.size(0), -1).sum(dim=1)
         else:
             logdet = mu.new_zeros(mu.size(0))
         out = out + mu
@@ -242,10 +244,10 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, si:i+1, sj:tj]
                 out_curr = out[:, :, si:i+1, sj:tj]
                 # [batch, channels, cH, cW]
-                mu, log_scale = self.calc_mu_and_scale(out_curr, h=h)
+                mu, scale = self.calc_mu_and_scale(out_curr, h=h)
                 new_out = input_curr - mu
                 if self.scale:
-                    new_out = new_out.div(log_scale.exp() + 1e-12)
+                    new_out = new_out.div(scale + 1e-12)
                 out[:, :, i, j] = new_out[:, :, -1, j - sj]
         return out
 
@@ -264,10 +266,10 @@ class MaskedConvFlow(Flow):
                 input_curr = input[:, :, i:si, sj:tj]
                 out_curr = out[:, :, i:si, sj:tj]
                 # [batch, channels, cH, cW]
-                mu, log_scale = self.calc_mu_and_scale(out_curr, h=h)
+                mu, scale = self.calc_mu_and_scale(out_curr, h=h)
                 new_out = input_curr - mu
                 if self.scale:
-                    new_out = new_out.div(log_scale.exp() + 1e-12)
+                    new_out = new_out.div(scale + 1e-12)
                 out[:, :, i, j] = new_out[:, :, 0, j - sj]
         return out
 
@@ -295,11 +297,11 @@ class MaskedConvFlow(Flow):
 
     @overrides
     def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        mu, log_scale = self.init_net(data, h=h, init_scale=init_scale)
+        mu, scale = self.init_net(data, h=h, init_scale=init_scale)
         out = data
         if self.scale:
-            out = out.mul(log_scale.exp())
-            logdet = log_scale.view(mu.size(0), -1).sum(dim=1)
+            out = out.mul(scale)
+            logdet = scale.log().view(mu.size(0), -1).sum(dim=1)
         else:
             logdet = mu.new_zeros(mu.size(0))
         out = out + mu
