@@ -69,7 +69,7 @@ class MaCowStep(Flow):
     """
     def __init__(self, in_channels, kernel_size, hidden_channels, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
-        num_units = 2
+        num_units = 4
         units = [MaCowUnit(in_channels, kernel_size, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
         self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
@@ -248,8 +248,9 @@ class MaCow(Flow):
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                half = levels / 2
-                hidden_channels = 256 if level < half else 512
+                # half = levels / 2
+                # hidden_channels = 256 if level < half else 512
+                hidden_channels = 512
                 macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
                 in_channels = in_channels // 2
