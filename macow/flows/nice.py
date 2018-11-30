@@ -70,7 +70,8 @@ class NICE(Flow):
         mu = self.net(z1)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            scale = log_scale.add_(2.).sigmoid_()
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh_().add_(1.0)
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:
@@ -98,7 +99,8 @@ class NICE(Flow):
         mu = self.net(z1)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            scale = log_scale.add_(2.).sigmoid_()
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh_().add_(1.0)
             z2 = (z2 - mu).div(scale + 1e-12)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1) * -1.0
         else:
@@ -114,7 +116,8 @@ class NICE(Flow):
         mu = self.net.init(z1, init_scale=init_scale)
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            scale = log_scale.add_(2.).sigmoid_()
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh_().add_(1.0)
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:

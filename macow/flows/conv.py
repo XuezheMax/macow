@@ -193,7 +193,8 @@ class MaskedConvFlow(Flow):
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            scale = log_scale.add_(2.).sigmoid_()
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh_().add_(1.0)
         return mu, scale
 
     def calc_mu_and_scale(self, input: torch.Tensor, h=None):
@@ -201,7 +202,8 @@ class MaskedConvFlow(Flow):
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            scale = log_scale.add_(2.).sigmoid_()
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh_().add_(1.0)
         return mu, scale
 
     @overrides
