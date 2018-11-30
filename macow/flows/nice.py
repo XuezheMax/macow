@@ -50,6 +50,24 @@ class NICE(Flow):
             out_channels = out_channels * 2
         self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, dropout=dropout)
 
+    def calc_mu_and_scale(self, z1: torch.Tensor, h=None):
+        mu = self.net(z1)
+        scale = None
+        if self.scale:
+            mu, log_scale = mu.chunk(2, dim=1)
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh() + 1.0
+        return mu, scale
+
+    def init_net(self, z1: torch.Tensor, h=None, init_scale=1.0):
+        mu = self.net.init(z1, init_scale=init_scale)
+        scale = None
+        if self.scale:
+            mu, log_scale = mu.chunk(2, dim=1)
+            # scale = log_scale.add_(2.).sigmoid_()
+            scale = log_scale.tanh() + 1.0
+        return mu, scale
+
     @overrides
     def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -67,17 +85,13 @@ class NICE(Flow):
         """
         # [batch, in_channels, H, W]
         z1, z2 = input.chunk(2, dim=1)
-        mu = self.net(z1)
+        mu, scale = self.calc_mu_and_scale(z1, h)
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
-            # scale = log_scale.add_(2.).sigmoid_()
-            scale = log_scale.tanh() + 1.0
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:
             logdet = z1.new_zeros(z1.size(0))
         z2 = z2 + mu
-
         return torch.cat([z1, z2], dim=1), logdet
 
     @overrides
@@ -96,15 +110,12 @@ class NICE(Flow):
 
         """
         z1, z2 = input.chunk(2, dim=1)
-        mu = self.net(z1)
+        mu, scale = self.calc_mu_and_scale(z1, h)
+        z2 = z2 - mu
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
-            # scale = log_scale.add_(2.).sigmoid_()
-            scale = log_scale.tanh() + 1.0
-            z2 = (z2 - mu).div(scale + 1e-12)
+            z2 = z2.div(scale + 1e-12)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1) * -1.0
         else:
-            z2 = z2 - mu
             logdet = z1.new_zeros(z1.size(0))
 
         return torch.cat([z1, z2], dim=1), logdet
@@ -113,11 +124,8 @@ class NICE(Flow):
     def init(self, data: torch.Tensor, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, in_channels, H, W]
         z1, z2 = data.chunk(2, dim=1)
-        mu = self.net.init(z1, init_scale=init_scale)
+        mu, scale = self.init_net(z1, h=h, init_scale=init_scale)
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
-            # scale = log_scale.add_(2.).sigmoid_()
-            scale = log_scale.tanh() + 1.0
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
         else:
