@@ -24,6 +24,7 @@ from macow.utils import exponentialMovingAverage, total_grad_norm
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
+parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
@@ -74,6 +75,7 @@ test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=500, shuffle=False, num_workers=args.workers, pin_memory=True)
+batch_steps = args.batch_steps
 
 print(len(train_index))
 print(len(test_index))
@@ -98,12 +100,17 @@ def train(epoch):
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
         data = preprocess(data.to(device, non_blocking=True), n_bits, True)
-
         batch_size = len(data)
         optimizer.zero_grad()
-        log_probs = fgen.log_probability(data)
-        loss = log_probs.mean() * -1.0
-        loss.backward()
+        nll_batch = 0
+        data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
+        for data in data_list:
+            log_probs = fgen.log_probability(data)
+            loss = log_probs.mean() * (-1.0 / batch_steps)
+            loss.backward()
+            with torch.no_grad():
+                nll_batch -= log_probs.sum().item()
+
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(fgen.parameters(), grad_clip)
         else:
@@ -115,10 +122,8 @@ def train(epoch):
             optimizer.step()
             scheduler.step()
             # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
-
-            with torch.no_grad():
-                num_insts += batch_size
-                nll -= log_probs.sum()
+            num_insts += batch_size
+            nll += nll_batch
 
         if batch_idx % args.log_interval == 0:
             sys.stdout.write("\b" * num_back)
@@ -272,7 +277,7 @@ checkpoint_epochs = 5
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
-    if epoch < 11 or (epoch < 1000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
+    if epoch < 11 or (epoch < 5000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
         with torch.no_grad():
             test_itr = 5
             nlls = []
