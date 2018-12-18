@@ -38,14 +38,15 @@ class ResNetBlock(nn.Module):
 
 
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False, dropout=0.0, factor=2):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
         if hidden_channels is None:
             hidden_channels = min(8 * in_channels, 512)
-        out_channels = in_channels // 2
+        out_channels = in_channels // factor
         in_channels = in_channels - out_channels
+        self.z1_channels = in_channels
         if scale:
             out_channels = out_channels * 2
         self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, dropout=dropout)
@@ -56,7 +57,6 @@ class NICE(Flow):
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-            # scale = log_scale.tanh_() + 1.0
         return mu, scale
 
     def init_net(self, z1: torch.Tensor, h=None, init_scale=1.0):
@@ -65,7 +65,6 @@ class NICE(Flow):
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-            # scale = log_scale.tanh_().add_(1.0)
         return mu, scale
 
     @overrides
@@ -84,7 +83,8 @@ class NICE(Flow):
 
         """
         # [batch, in_channels, H, W]
-        z1, z2 = input.chunk(2, dim=1)
+        z1 = input[:, :self.z1_channels]
+        z2 = input[:, self.z1_channels:]
         mu, scale = self.calc_mu_and_scale(z1, h)
         if self.scale:
             z2 = z2.mul(scale)
@@ -109,7 +109,8 @@ class NICE(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        z1, z2 = input.chunk(2, dim=1)
+        z1 = input[:, :self.z1_channels]
+        z2 = input[:, self.z1_channels:]
         mu, scale = self.calc_mu_and_scale(z1, h)
         z2 = z2 - mu
         if self.scale:
@@ -123,7 +124,8 @@ class NICE(Flow):
     @overrides
     def init(self, data: torch.Tensor, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, in_channels, H, W]
-        z1, z2 = data.chunk(2, dim=1)
+        z1 = data[:, :self.z1_channels]
+        z2 = data[:, self.z1_channels:]
         mu, scale = self.init_net(z1, h=h, init_scale=init_scale)
         if self.scale:
             z2 = z2.mul(scale)

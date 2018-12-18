@@ -1,6 +1,6 @@
 __author__ = 'max'
 
-from typing import Tuple
+from typing import Tuple, List
 import torch
 from torch._six import inf
 
@@ -27,10 +27,6 @@ def squeeze2d(x, factor=2) -> torch.Tensor:
     assert height % factor == 0 and width % factor == 0
     # [batch, channels, height, width] -> [batch, channels, height/factor, factor, width/factor, factor]
     x = x.view(-1, n_channels, height // factor, factor, width // factor, factor)
-
-    # [batch, channels, factor, factor, height/factor, width/factor]
-    # x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
-
     # [batch, factor, factor, n_channels, height/factor, width/factor]
     x = x.permute(0, 3, 5, 1, 2, 4).contiguous()
     # [batch, factor*factor*channels, height/factor, width/factor]
@@ -38,9 +34,10 @@ def squeeze2d(x, factor=2) -> torch.Tensor:
     return x
 
 
-def split2d(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    # [batch, channels/2, height, width] * 2
-    return x.chunk(2, dim=1)
+def split2d(x: torch.Tensor, z1_channels) -> Tuple[torch.Tensor, torch.Tensor]:
+    z1 = x[:, :z1_channels]
+    z2 = x[:, z1_channels:]
+    return z1, z2
 
 
 def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
@@ -51,12 +48,6 @@ def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     batch, n_channels, height, width = x.size()
     num_bins = factor ** 2
     assert n_channels >= num_bins and n_channels % num_bins == 0
-
-    # [batch, channels, height, width] -> [batch, channels/(factor*factor), factor, factor, height, width]
-    # x = x.view(-1, int(n_channels / num_bins), factor, factor, height, width)
-    # [batch, channels/(factor*factor), height, factor, width, factor]
-    # x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
-
     # [batch, channels, height, width] -> [batch, factor, factor, channels/(factor*factor), height, width]
     x = x.view(-1, factor, factor, n_channels // num_bins, height, width)
     # [batch, channels/(factor*factor), height, factor, width, factor]
@@ -66,9 +57,9 @@ def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     return x
 
 
-def unsplit2d(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-    # [batch, channels/2, heigh, weight] * 2 -> [batch, channels, height, weight]
-    return torch.cat([x1, x2], dim=1)
+def unsplit2d(xs: List[torch.Tensor]) -> torch.Tensor:
+    # [batch, channels, heigh, weight]
+    return torch.cat(xs, dim=1)
 
 
 def exponentialMovingAverage(original, shadow, decay_rate, init=False):
