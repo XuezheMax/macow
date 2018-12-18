@@ -1,9 +1,9 @@
 {
   "flow": {
     "type": "macow",
-    "levels": 4,
-    "num_steps": [4, [6, 6], [4, 4], 8],
-    "factors": [4, 4],
+    "levels": 3,
+    "num_steps": [4, [8, 8], 8],
+    "factors": [4],
     "in_channels": 3,
     "kernel_size": 3,
     "dropout": 0.0,
