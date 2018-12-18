@@ -277,7 +277,7 @@ class MaCow(Flow):
     """
     Masked Convolutional Flow
     """
-    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=256, scale=True, inverse=False, dropout=0.0):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)
@@ -295,9 +295,6 @@ class MaCow(Flow):
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                # half = levels / 2
-                # hidden_channels = 256 if level < half else 512
-                hidden_channels = 256
                 macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, factor=factors[level], scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
                 in_channels = macow_block.z1_channels
