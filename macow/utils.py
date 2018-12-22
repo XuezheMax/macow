@@ -27,10 +27,16 @@ def squeeze2d(x, factor=2) -> torch.Tensor:
     assert height % factor == 0 and width % factor == 0
     # [batch, channels, height, width] -> [batch, channels, height/factor, factor, width/factor, factor]
     x = x.view(-1, n_channels, height // factor, factor, width // factor, factor)
+
     # [batch, factor, factor, n_channels, height/factor, width/factor]
-    x = x.permute(0, 3, 5, 1, 2, 4).contiguous()
+    # x = x.permute(0, 3, 5, 1, 2, 4).contiguous()
     # [batch, factor*factor*channels, height/factor, width/factor]
-    x = x.view(-1, factor * factor * n_channels, height // factor, width // factor)
+    # x = x.view(-1, factor * factor * n_channels, height // factor, width // factor)
+
+    # [batch, channels, factor, factor, height/factor, width/factor]
+    x = x.permute(0, 1, 3, 5, 2, 4).contiguous()
+    # [batch, channels*factor*factor, height/factor, width/factor]
+    x = x.view(-1, n_channels * factor * factor, height // factor, width // factor)
     return x
 
 
@@ -48,10 +54,17 @@ def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     batch, n_channels, height, width = x.size()
     num_bins = factor ** 2
     assert n_channels >= num_bins and n_channels % num_bins == 0
+
     # [batch, channels, height, width] -> [batch, factor, factor, channels/(factor*factor), height, width]
-    x = x.view(-1, factor, factor, n_channels // num_bins, height, width)
+    # x = x.view(-1, factor, factor, n_channels // num_bins, height, width)
     # [batch, channels/(factor*factor), height, factor, width, factor]
-    x = x.permute(0, 3, 4, 1, 5, 2).contiguous()
+    # x = x.permute(0, 3, 4, 1, 5, 2).contiguous()
+
+    # [batch, channels, height, width] -> [batch, channels/(factor*factor), factor, factor, height, width]
+    x = x.view(-1, n_channels // num_bins, factor, factor, height, width)
+    # [batch, channels/(factor*factor), height, factor, width, factor]
+    x = x.permute(0, 1, 4, 2, 5, 3).contiguous()
+
     # [batch, channels/(factor*factor), height*factor, width*factor]
     x = x.view(-1, n_channels // num_bins, height * factor, width * factor)
     return x
