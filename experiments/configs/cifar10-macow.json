@@ -2,7 +2,7 @@
   "flow": {
     "type": "macow",
     "levels": 4,
-    "num_steps": [2, [12, 12], [8, 8], 8],
+    "num_steps": [4, [12, 12], [8, 8], 8],
     "factors": [4, 4],
     "in_channels": 3,
     "kernel_size": 3,
@@ -10,5 +10,5 @@
     "dropout": 0.0,
     "inverse": true
   },
-  "ngpu": 1
+  "ngpu": 2
 }
