@@ -277,16 +277,17 @@ class MaCow(Flow):
     """
     Masked Convolutional Flow
     """
-    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=256, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=256, scale=True, inverse=False, dropout=0.0, bottom=True):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)
-        factors = [0] + factors + [0]
+        factors = [0] + factors + [0] if bottom else factors + [0]
         assert levels == len(factors)
         blocks = []
         self.levels = levels
+        self.internals = levels - 2 if bottom else levels - 1
         for level in range(levels):
-            if level == 0:
+            if level == 0 and bottom:
                 macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, inverse=inverse)
                 blocks.append(macow_block)
             elif level == levels - 1:
@@ -316,7 +317,7 @@ class MaCow(Flow):
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
-        for _ in range(self.levels - 2):
+        for _ in range(self.internals):
             out2 = outputs.pop()
             out = unsqueeze2d(unsplit2d([out, out2]), factor=2)
         assert len(outputs) == 0
@@ -360,7 +361,7 @@ class MaCow(Flow):
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
-        for _ in range(self.levels - 2):
+        for _ in range(self.internals):
             out2 = outputs.pop()
             out = unsqueeze2d(unsplit2d([out, out2]), factor=2)
         assert len(outputs) == 0

@@ -162,6 +162,19 @@ def preprocess(img, n_bits, noisy):
     return img
 
 
+def preprocess_full(img, noisy):
+    img8bits = preprocess(img, 8, False)
+    img5bits = preprocess(img, 5, False)
+    img3bits = preprocess(img, 3, False)
+    # add noise
+    if noisy:
+        eps = img.new_empty(img.size()).uniform_(-1., 1.)
+        img8bits = img8bits + eps.div(256.)
+        img5bits = img5bits + eps.div(32.)
+        img3bits = img3bits + eps.div(8.)
+    return img8bits, img5bits, img3bits
+
+
 def postprocess(img, n_bits):
     n_bins = 2. ** n_bits
     # re-normalize

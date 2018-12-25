@@ -8,3 +8,4 @@ from macow.flows.parallel import *
 from macow.flows.nice import NICE
 from macow.flows.macow import MaCow
 from macow.flows.glow import Glow
+from macow.flows.depth_scale import DepthScaleBlock
