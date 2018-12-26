@@ -95,40 +95,29 @@ def get_optimizer(learning_rate, parameters):
 
 
 def train(epoch):
-    def depthscale_step():
-        # img8bits_list = [img8bits,] if depth_batch_steps == 1 else img8bits.chunk(depth_batch_steps, dim=0)
-        # img5bits_list = [img5bits,] if depth_batch_steps == 1 else img5bits.chunk(depth_batch_steps, dim=0)
-        # img3bits_list = [img3bits,] if depth_batch_steps == 1 else img3bits.chunk(depth_batch_steps, dim=0)
-        # l2_loss_3bits = l2_loss_5bits = 0
-        # for img8bits, img5bits, img3bits in zip(img8bits_list, img5bits_list, img3bits_list):
-        x_8bits, logdet_8bits, internal_5bits = dsgen.depth_downscale_8bits(img8bits)
-        loss_5bits = (img5bits - internal_5bits).pow(2).sum()
-        loss = loss_5bits.div(batch_size / eta)
-        loss.backward()
+    def opt_step(img8bits, img5bits, img3bits):
+        x, logdet_bottom, x_5bits = dsgen.depth_downscale_8bits(img8bits)
+        log_probs_8bits = dsgen.log_probability(x, logdet_bottom).sum()
 
-        x_5bits, logdet_5bits, internal_3bits = dsgen.depth_downscale_5bits(img5bits)
-        loss_3bits = (img3bits - internal_3bits).pow(2).sum()
-        loss = loss_3bits.div(batch_size / eta)
-        loss.backward()
+        x, logdet_bottom, x_3bits = dsgen.depth_downscale_5bits(img5bits)
+        log_probs_5bits = dsgen.log_probability(x, logdet_bottom).sum()
 
-        x_3bits, logdet_3bits = dsgen.depth_downscale_3bits(img3bits)
+        x, logdet_bottom = dsgen.depth_downscale_3bits(img3bits)
+        log_probs_3bits = dsgen.log_probability(x, logdet_bottom).sum()
+
+        loss_5bits = (img5bits - x_5bits).pow(2).sum()
+        loss_3bits = (img3bits - x_3bits).pow(2).sum()
+
+        loss = ((loss_5bits + loss_3bits) * eta - log_probs_8bits - log_probs_5bits - log_probs_3bits) / batch_size
+        loss.backward()
 
         with torch.no_grad():
-            l2_loss_5bits = loss_5bits.item()
-            l2_loss_3bits = loss_3bits.item()
-        return (x_8bits, logdet_8bits), (x_5bits, logdet_5bits), (x_3bits, logdet_3bits), (l2_loss_5bits, l2_loss_3bits)
-
-    def flow_step(x, logdet_bottom):
-        xs = [x, ] if batch_steps == 1 else x.chunk(batch_steps, dim=0)
-        logdet_bottoms = [logdet_bottom, ] if batch_steps == 1 else logdet_bottom.chunk(batch_steps, dim=0)
-        nll_batch = 0
-        for x, logdet_bottom in zip(xs, logdet_bottoms):
-            log_probs = dsgen.log_probability(x, logdet_bottom)
-            loss = log_probs.mean() * (-1.0 / batch_steps)
-            loss.backward()
-            with torch.no_grad():
-                nll_batch -= log_probs.sum().item()
-        return nll_batch
+            l2_step_5bits = loss_5bits.item()
+            l2_step_3bits = loss_3bits.item()
+            nll_step_8bits = log_probs_8bits.item() * -1.
+            nll_step_5bits = log_probs_5bits.item() * -1.
+            nll_step_3bits = log_probs_3bits.item() * -1.
+        return nll_step_8bits, nll_step_5bits, nll_step_3bits, l2_step_5bits, l2_step_3bits
 
     print('Epoch: %d (lr=%.6f (%s), patient=%d' % (epoch, lr, opt, patient))
     dsgen.train()
@@ -145,14 +134,15 @@ def train(epoch):
         optimizer.zero_grad()
         img8bits, img5bits, img3bits = preprocess_full(data.to(device, non_blocking=True), True)
         batch_size = len(img3bits)
-        # depth scale step
-        p_8bits, p_5bits, p_3bits, (l2_loss_5bits, l2_loss_3bits) = depthscale_step()
-        l2_5bits += l2_loss_5bits
-        l2_3bits += l2_loss_3bits
-        # flow step
-        nll_batch_8bits = flow_step(*p_8bits)
-        nll_batch_5bits = flow_step(*p_5bits)
-        nll_batch_3bits = flow_step(*p_3bits)
+        img8bits_list = [img8bits, ] if batch_steps == 1 else img8bits.chunk(batch_steps, dim=0)
+        img5bits_list = [img5bits, ] if batch_steps == 1 else img5bits.chunk(batch_steps, dim=0)
+        img3bits_list = [img3bits, ] if batch_steps == 1 else img3bits.chunk(batch_steps, dim=0)
+        # opt step
+        batch_loss = [0, 0, 0, 0, 0]
+        for img8bits, img5bits, img3bits in zip(img8bits_list, img5bits_list, img3bits_list):
+            step_loss = opt_step(img8bits, img5bits, img3bits)
+            for i in range(len(batch_loss)):
+                batch_loss[i] += step_loss[i]
 
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(dsgen.parameters(), grad_clip)
@@ -166,9 +156,11 @@ def train(epoch):
             scheduler.step()
             # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
             num_insts += batch_size
-            nll_8bits += nll_batch_8bits
-            nll_5bits += nll_batch_5bits
-            nll_3bits += nll_batch_3bits
+            nll_8bits += batch_loss[0]
+            nll_5bits += batch_loss[1]
+            nll_3bits += batch_loss[2]
+            l2_5bits += batch_loss[3]
+            l2_3bits += batch_loss[4]
 
         if batch_idx % args.log_interval == 0:
             sys.stdout.write("\b" * num_back)
