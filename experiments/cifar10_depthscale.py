@@ -407,7 +407,7 @@ else:
     init_batch_size = 2048
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
-    init_data = preprocess_full(init_data, True).to(device)
+    init_data = preprocess_full(init_data.to(device), True)
     dsgen.eval()
     dsgen.init(*init_data, init_scale=1.0)
     # create shadow mae for ema
