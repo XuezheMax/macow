@@ -3,7 +3,7 @@
     "type": "macow",
     "levels": 5,
     "num_steps": [4, [12, 12], [12, 12], [12, 12], 12],
-    "factors": [4, 4],
+    "factors": [4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
