@@ -25,8 +25,7 @@ parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
-parser.add_argument('--depth-steps', type=int, default=3, metavar='N', help='depth scale steps(default: 3)')
-parser.add_argument('--depth-batch-steps', type=int, default=1, metavar='N', help='number of steps for each depth scale batch (the batch size of each step is depth-batch-size / steps (default: 1)')
+# parser.add_argument('--depth-batch-steps', type=int, default=1, metavar='N', help='number of steps for each depth scale batch (the batch size of each step is depth-batch-size / steps (default: 1)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
@@ -35,6 +34,7 @@ parser.add_argument('--seed', type=int, default=6700417, metavar='S', help='rand
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--eta', type=float, default=1.0, help='l2 loss weight')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
@@ -78,10 +78,9 @@ test_index = np.arange(len(test_data))
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=500, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
+# depth_batch_steps = args.depth_batch_steps
 
-depth_steps = args.depth_steps
-depth_batch_steps = args.depth_batch_steps
-
+eta = args.eta
 print(len(train_index))
 print(len(test_index))
 
@@ -97,50 +96,35 @@ def get_optimizer(learning_rate, parameters):
 
 def train(epoch):
     def depthscale_step():
-        index = np.random.choice(train_index, args.batch_size, replace=False)
-        data, _ = get_batch(train_data, index)
-        img8bits, img5bits, img3bits = preprocess_full(data.to(device, non_blocking=True), True)
-        img8bits_list = [img8bits,] if depth_batch_steps == 1 else img8bits.chunk(depth_batch_steps, dim=0)
-        img5bits_list = [img5bits,] if depth_batch_steps == 1 else img5bits.chunk(depth_batch_steps, dim=0)
-        img3bits_list = [img3bits,] if depth_batch_steps == 1 else img3bits.chunk(depth_batch_steps, dim=0)
-        l2_loss_3bits = l2_loss_5bits = 0
-        batch_size = data.size(0)
-        bottom_optimizer.zero_grad()
-        for img8bits, img5bits, img3bits in zip(img8bits_list, img5bits_list, img3bits_list):
-            x_5bits, _ = dsgen.depth_8to5bits(img8bits)
-            loss_5bits = (img5bits - x_5bits).pow(2).sum()
-            loss = loss_5bits.div(batch_size)
-            loss.backward()
+        # img8bits_list = [img8bits,] if depth_batch_steps == 1 else img8bits.chunk(depth_batch_steps, dim=0)
+        # img5bits_list = [img5bits,] if depth_batch_steps == 1 else img5bits.chunk(depth_batch_steps, dim=0)
+        # img3bits_list = [img3bits,] if depth_batch_steps == 1 else img3bits.chunk(depth_batch_steps, dim=0)
+        # l2_loss_3bits = l2_loss_5bits = 0
+        # for img8bits, img5bits, img3bits in zip(img8bits_list, img5bits_list, img3bits_list):
+        x_8bits, logdet_8bits, internal_5bits = dsgen.depth_downscale_8bits(img8bits)
+        loss_5bits = (img5bits - internal_5bits).pow(2).sum()
+        loss = loss_5bits.div(batch_size / eta)
+        loss.backward()
 
-            x_3bits, _ = dsgen.depth_5to3bits(img5bits)
-            loss_3bits = (img3bits - x_3bits).pow(2).sum()
-            loss = loss_3bits.div(batch_size)
-            loss.backward()
-            bottom_optimizer.step()
+        x_5bits, logdet_5bits, internal_3bits = dsgen.depth_downscale_5bits(img5bits)
+        loss_3bits = (img3bits - internal_3bits).pow(2).sum()
+        loss = loss_3bits.div(batch_size / eta)
+        loss.backward()
 
-            with torch.no_grad():
-                l2_loss_5bits += loss_5bits.item()
-                l2_loss_3bits += loss_3bits.item()
-        return l2_loss_5bits, l2_loss_3bits, batch_size
+        x_3bits, logdet_3bits = dsgen.depth_downscale_3bits(img3bits)
 
-    def flow_step(data, n_bits):
-        if n_bits == 8:
-            bottom_func = dsgen.depth_downscale_8bits
-        elif n_bits == 5:
-            bottom_func = dsgen.depth_downscale_5bits
-        elif n_bits == 3:
-            bottom_func = dsgen.depth_downscale_3bits
-        else:
-            bottom_func = None
+        with torch.no_grad():
+            l2_loss_5bits = loss_5bits.item()
+            l2_loss_3bits = loss_3bits.item()
+        return (x_8bits, logdet_8bits), (x_5bits, logdet_5bits), (x_3bits, logdet_3bits), (l2_loss_5bits, l2_loss_3bits)
 
-        data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
+    def flow_step(x, logdet_bottom):
+        xs = [x, ] if batch_steps == 1 else x.chunk(batch_steps, dim=0)
+        logdet_bottoms = [logdet_bottom, ] if batch_steps == 1 else logdet_bottom.chunk(batch_steps, dim=0)
         nll_batch = 0
-        for data in data_list:
-            res = bottom_func(data)
-            x = res[0]
-            logdet_bottom = res[1]
+        for x, logdet_bottom in zip(xs, logdet_bottoms):
             log_probs = dsgen.log_probability(x, logdet_bottom)
-            loss = log_probs.mean() * (-1.0 / (batch_steps * 3))
+            loss = log_probs.mean() * (-1.0 / batch_steps)
             loss.backward()
             with torch.no_grad():
                 nll_batch -= log_probs.sum().item()
@@ -156,22 +140,19 @@ def train(epoch):
     num_nans = 0
     l2_5bits = 0
     l2_3bits = 0
-    num_insts_l2 = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
-        # depth scale step
-        for _ in range(depth_steps):
-            l2_loss_5bits, l2_loss_3bits, num_l2 = depthscale_step()
-            l2_5bits += l2_loss_5bits
-            l2_3bits += l2_loss_3bits
-            num_insts_l2 += num_l2
-        # flow step
+        optimizer.zero_grad()
         img8bits, img5bits, img3bits = preprocess_full(data.to(device, non_blocking=True), True)
         batch_size = len(img3bits)
-        optimizer.zero_grad()
-        nll_batch_8bits = flow_step(img8bits, 8)
-        nll_batch_5bits = flow_step(img5bits, 5)
-        nll_batch_3bits = flow_step(img3bits, 3)
+        # depth scale step
+        p_8bits, p_5bits, p_3bits, (l2_loss_5bits, l2_loss_3bits) = depthscale_step()
+        l2_5bits += l2_loss_5bits
+        l2_3bits += l2_loss_3bits
+        # flow step
+        nll_batch_8bits = flow_step(*p_8bits)
+        nll_batch_5bits = flow_step(*p_5bits)
+        nll_batch_3bits = flow_step(*p_3bits)
 
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(dsgen.parameters(), grad_clip)
@@ -199,8 +180,8 @@ def train(epoch):
             bpd_8bits = train_nll_8bits / (nx * np.log(2.0))
             bpd_5bits = train_nll_5bits / (nx * np.log(2.0))
             bpd_3bits = train_nll_3bits / (nx * np.log(2.0))
-            train_l2_5bits = l2_5bits / num_insts_l2
-            train_l2_3bits = l2_3bits / num_insts_l2
+            train_l2_5bits = l2_5bits / num_insts
+            train_l2_3bits = l2_3bits / num_insts
             log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}, L2: {:.2f}, {:.2f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
                 train_nll_8bits, train_nll_5bits, train_nll_3bits, bpd_8bits, bpd_5bits, bpd_3bits, train_l2_5bits, train_l2_3bits)
@@ -217,8 +198,8 @@ def train(epoch):
     bpd_8bits = train_nll_8bits / (nx * np.log(2.0))
     bpd_5bits = train_nll_5bits / (nx * np.log(2.0))
     bpd_3bits = train_nll_3bits / (nx * np.log(2.0))
-    train_l2_5bits = l2_5bits / num_insts_l2
-    train_l2_3bits = l2_3bits / num_insts_l2
+    train_l2_5bits = l2_5bits / num_insts
+    train_l2_3bits = l2_3bits / num_insts
     print('Average NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}, L2: {:.2f}, {:.2f}, time: {:.1f}s'.format(
         train_nll_8bits, train_nll_5bits, train_nll_3bits, bpd_8bits, bpd_5bits, bpd_3bits, train_l2_5bits, train_l2_3bits, time.time() - start_time))
 
@@ -352,7 +333,6 @@ if args.recover:
     dsgen = DepthScaleFlowModel.from_params(params).to(device)
     optimizer = get_optimizer(lr, dsgen.parameters())
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=-1)
-    bottom_optimizer = get_optimizer(lr, dsgen.bottoms.parameters())
 
     checkpoint = torch.load(checkpoint_name)
     start_epoch = checkpoint['epoch']
@@ -369,7 +349,6 @@ if args.recover:
     dsgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
-    bottom_optimizer.load_state_dict(checkpoint['bottom_optimizer'])
 
     with torch.no_grad():
         test_itr = 5
@@ -421,7 +400,6 @@ else:
     lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
     scheduler.step()
-    bottom_optimizer = get_optimizer(lr, dsgen.bottoms.parameters())
 
     start_epoch = 1
     patient = 0
@@ -509,7 +487,6 @@ for epoch in range(start_epoch, args.epochs + 1):
                       'model': dsgen.state_dict(),
                       'optimizer': optimizer.state_dict(),
                       'scheduler': scheduler.state_dict(),
-                      'bottom_optimizer': bottom_optimizer.state_dict(),
                       'best_epoch': best_epoch,
                       'best_nll_8bits': best_nll_8bits,
                       'best_nll_5bits': best_nll_5bits,
