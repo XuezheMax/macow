@@ -96,17 +96,19 @@ def train(epoch):
     def opt_step(img8bits, img5bits, img3bits):
         x, logdet_bottom, x_5bits = dsgen.depth_downscale_8bits(img8bits)
         log_probs_8bits = dsgen.log_probability(x, logdet_bottom).sum()
+        loss_5bits = (img5bits - x_5bits).pow(2).sum()
+        loss = (loss_5bits * eta - log_probs_8bits) / batch_size
+        loss.backward()
 
         x, logdet_bottom, x_3bits = dsgen.depth_downscale_5bits(img5bits)
         log_probs_5bits = dsgen.log_probability(x, logdet_bottom).sum()
+        loss_3bits = (img3bits - x_3bits).pow(2).sum()
+        loss = (loss_3bits * eta - log_probs_5bits) / batch_size
+        loss.backward()
 
         x, logdet_bottom = dsgen.depth_downscale_3bits(img3bits)
         log_probs_3bits = dsgen.log_probability(x, logdet_bottom).sum()
-
-        loss_5bits = (img5bits - x_5bits).pow(2).sum()
-        loss_3bits = (img3bits - x_3bits).pow(2).sum()
-
-        loss = ((loss_5bits + loss_3bits) * eta - log_probs_8bits - log_probs_5bits - log_probs_3bits) / batch_size
+        loss =  log_probs_3bits * (-1. / batch_size)
         loss.backward()
 
         with torch.no_grad():
