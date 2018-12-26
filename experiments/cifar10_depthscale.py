@@ -25,7 +25,6 @@ parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
-# parser.add_argument('--depth-batch-steps', type=int, default=1, metavar='N', help='number of steps for each depth scale batch (the batch size of each step is depth-batch-size / steps (default: 1)')
 parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
@@ -78,7 +77,6 @@ test_index = np.arange(len(test_data))
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=500, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
-# depth_batch_steps = args.depth_batch_steps
 
 eta = args.eta
 print(len(train_index))
