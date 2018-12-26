@@ -199,10 +199,11 @@ def train(epoch):
             bpd_8bits = train_nll_8bits / (nx * np.log(2.0))
             bpd_5bits = train_nll_5bits / (nx * np.log(2.0))
             bpd_3bits = train_nll_3bits / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}'.format(
+            train_l2_5bits = l2_5bits / num_insts_l2
+            train_l2_3bits = l2_3bits / num_insts_l2
+            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}, L2: {:.2f}, {:.2f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
-                train_nll_8bits, train_nll_5bits, train_nll_3bits,
-                bpd_8bits, bpd_5bits, bpd_3bits)
+                train_nll_8bits, train_nll_5bits, train_nll_3bits, bpd_8bits, bpd_5bits, bpd_3bits, train_l2_5bits, train_l2_3bits)
             sys.stdout.write(log_info)
             sys.stdout.flush()
             num_back = len(log_info)
@@ -216,9 +217,10 @@ def train(epoch):
     bpd_8bits = train_nll_8bits / (nx * np.log(2.0))
     bpd_5bits = train_nll_5bits / (nx * np.log(2.0))
     bpd_3bits = train_nll_3bits / (nx * np.log(2.0))
-    print('Average NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}, time: {:.1f}s'.format(train_nll_8bits, train_nll_5bits, train_nll_3bits,
-                                                                                                   bpd_8bits, bpd_5bits, bpd_3bits,
-                                                                                                   time.time() - start_time))
+    train_l2_5bits = l2_5bits / num_insts_l2
+    train_l2_3bits = l2_3bits / num_insts_l2
+    print('Average NLL: {:.2f}, {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, {:.4f}, L2: {:.2f}, {:.2f}, time: {:.1f}s'.format(
+        train_nll_8bits, train_nll_5bits, train_nll_3bits, bpd_8bits, bpd_5bits, bpd_3bits, train_l2_5bits, train_l2_3bits, time.time() - start_time))
 
 
 def eval(data_loader):
