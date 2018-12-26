@@ -237,15 +237,15 @@ def eval(data_loader):
         num_insts += batch_size
 
         x, logdet_bottom, x_5bits = dsgen.depth_downscale_8bits(img8bits)
-        log_probs_8bits = dsgen(x, logdet_bottom)
+        log_probs_8bits = dsgen.log_probability(x, logdet_bottom)
         test_nll_8bits -= log_probs_8bits.sum().item()
 
         x, logdet_bottom, x_3bits = dsgen.depth_downscale_5bits(img5bits)
-        log_probs_5bits = dsgen(x, logdet_bottom)
+        log_probs_5bits = dsgen.log_probability(x, logdet_bottom)
         test_nll_5bits -= log_probs_5bits.sum().item()
 
         x, logdet_bottom = dsgen.depth_downscale_3bits(img3bits)
-        log_probs_3bits = dsgen(x, logdet_bottom)
+        log_probs_3bits = dsgen.log_probability(x, logdet_bottom)
         test_nll_3bits -= log_probs_3bits.sum().item()
 
         l2_5bits += (img5bits - x_5bits).pow(2).sum().item()
