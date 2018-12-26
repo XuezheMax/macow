@@ -12,7 +12,7 @@
     "inverse": true
   },
   "bottom": {
-    "num_steps": 4,
+    "num_steps": 8,
     "in_channels": 3,
     "kernel_size": 3,
     "inverse": true
