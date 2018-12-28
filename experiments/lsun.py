@@ -19,7 +19,7 @@ from torch.nn.utils import clip_grad_norm_
 
 from macow.data import load_datasets, get_batch, preprocess, postprocess
 from macow.model import FlowGenModel
-from macow.utils import exponentialMovingAverage, total_grad_norm
+from macow.utils import exponentialMovingAverage, total_grad_norm, logsumexp
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
@@ -60,6 +60,7 @@ nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
 n_bins = 2. ** n_bits
+test_k = 5
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
@@ -150,29 +151,32 @@ def train(epoch):
     print('Average NLL: {:.2f}, BPD: {:.4f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
 
 
-def eval(data_loader):
+def eval(data_loader, k):
     fgen.eval()
-    test_nll = 0
+    nll_mc = 0
+    nll_iw = 0
     num_insts = 0
-    num_nans = 0
     for i, (data, _) in enumerate(data_loader):
-        data = preprocess(data.to(device, non_blocking=True), n_bits, True)
+        # [batch, channels, H, W]
+        data = preprocess(data.to(device, non_blocking=True), n_bits, False)
+        batch, c, h, w = data.size()
+        # [batch, k, channels, H, W]
+        data = data.unsqueeze(1) + data.new_empty(batch, k, c, h, w).uniform_(-1. / n_bins, 1. / n_bins)
 
-        batch_size = len(data)
-        log_probs = fgen.log_probability(data)
-        mask = torch.isnan(log_probs)
-        batch_nans = mask.sum().item()
+        # [batch * k, channels, H, W] -> [batch * k] -> [batch, k]
+        log_probs = fgen.log_probability(data.view(batch * k, c, h, w)).view(batch, k)
 
-        num_insts += batch_size - batch_nans
-        num_nans += batch_nans
-        log_probs[mask] = 0.
-        test_nll -= log_probs.sum().item()
+        num_insts += batch
+        nll_mc -= log_probs.mean(dim=1).sum().item()
+        nll_iw -= (logsumexp(log_probs, dim=1) - math.log(k)).sum().item()
 
-    test_nll = test_nll / num_insts + np.log(n_bins / 2.) * nx
-    bits_per_pixel = test_nll / (nx * np.log(2.0))
+    nll_mc = nll_mc / num_insts + np.log(n_bins / 2.) * nx
+    bpd_mc = nll_mc / (nx * np.log(2.0))
+    nll_iw = nll_iw / num_insts + np.log(n_bins / 2.) * nx
+    bpd_iw = nll_iw / (nx * np.log(2.0))
 
-    print('NLL: {:.2f}, BPD: {:.4f}, NaN: {}'.format(test_nll, bits_per_pixel, num_nans))
-    return test_nll, bits_per_pixel
+    print('Avg  NLL: {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}'.format(nll_mc, nll_iw, bpd_mc, bpd_iw))
+    return nll_mc, nll_iw, bpd_mc, bpd_iw
 
 
 def reconstruct(epoch):
@@ -229,23 +233,14 @@ if args.recover:
     start_epoch = checkpoint['epoch']
     patient = checkpoint['patient']
     best_epoch = checkpoint['best_epoch']
-    best_nll = checkpoint['best_nll']
-    best_bpd = checkpoint['best_bpd']
+    best_nll_mc = checkpoint['best_nll']
+    best_bpd_mc = checkpoint['best_bpd']
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
 
     with torch.no_grad():
-        test_itr = 3
-        nlls = []
-        bits_per_pixels = []
-        for _ in range(test_itr):
-            nll, bits_per_pixel = eval(test_loader)
-            nlls.append(nll)
-            bits_per_pixels.append(bits_per_pixel)
-        nll = sum(nlls) / test_itr
-        bits_per_pixel = sum(bits_per_pixels) / test_itr
-        print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
+        _, best_nll_iw, _, best_bpd_iw = eval(test_loader, test_k)
 else:
     params = json.load(open(args.config, 'r'))
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
@@ -273,8 +268,10 @@ else:
     start_epoch = 1
     patient = 0
     best_epoch = 0
-    best_nll = 1e12
-    best_bpd = 1e12
+    best_nll_mc = 1e12
+    best_bpd_mc = 1e12
+    best_nll_iw = 1e12
+    best_bpd_iw = 1e12
 
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
@@ -284,32 +281,21 @@ for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
     print('-' * 50)
     with torch.no_grad():
-        test_itr = 10
-        nlls = []
-        bits_per_pixels = []
-        for _ in range(test_itr):
-            nll, bits_per_pixel = eval(test_loader)
-            nlls.append(nll)
-            bits_per_pixels.append(bits_per_pixel)
-        nll = sum(nlls) / test_itr
-        bits_per_pixel = sum(bits_per_pixels) / test_itr
-        print('Avg  NLL: {:.2f}, BPD: {:.4f}'.format(nll, bits_per_pixel))
+        nll_mc, nll_iw, bpd_mc, bpd_iw = eval(test_loader, test_k)
 
-    if nll < best_nll:
+    if nll_iw < best_nll_iw:
         patient = 0
         torch.save(fgen.state_dict(), model_name)
 
         best_epoch = epoch
-        best_nll = nll
-        best_bpd = bits_per_pixel
-
-        with torch.no_grad():
-            reconstruct(epoch)
-            sample(epoch)
+        best_nll_mc = nll_mc
+        best_nll_iw = nll_iw
+        best_bpd_mc = bpd_mc
+        best_bpd_iw = bpd_iw
     else:
         patient += 1
 
-    print('Best NLL: {:.2f}, BPD: {:.4f}, epoch: {}'.format(best_nll, best_bpd, best_epoch))
+    print('Best NLL: {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}, epoch: {}'.format(best_nll_mc, best_nll_iw, best_bpd_mc, best_bpd_iw, best_epoch))
     print('=' * 50)
 
     if epoch == warmups:
@@ -323,8 +309,10 @@ for epoch in range(start_epoch, args.epochs + 1):
                       'optimizer': optimizer.state_dict(),
                       'scheduler': scheduler.state_dict(),
                       'best_epoch': best_epoch,
-                      'best_nll': best_nll,
-                      'best_bpd': best_bpd,
+                      'best_nll_mc': best_nll_mc,
+                      'best_bpd_mc': best_bpd_mc,
+                      'best_nll_iw': best_nll_iw,
+                      'best_bpd_iw': best_bpd_iw,
                       'patient': patient}
         torch.save(checkpoint, checkpoint_name)
 
@@ -332,9 +320,10 @@ for epoch in range(start_epoch, args.epochs + 1):
         break
 
 fgen.load_state_dict(torch.load(model_name))
+final_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=args.workers, pin_memory=True)
 with torch.no_grad():
     print('Final test:')
-    eval(test_loader)
+    eval(final_loader, 512)
     print('-' * 50)
     reconstruct('final')
     sample('final')
