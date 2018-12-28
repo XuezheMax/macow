@@ -159,8 +159,8 @@ def preprocess(img, n_bits, beta, nsamples=1):
             u = beta.rsample(img.size()).type_as(img) - 0.5
             img = img + u
         else:
-            batch, c, h, w = img.size() - 0.5
-            u = beta.rsample((batch, nsamples, c, h, w)).type_as(img)
+            batch, c, h, w = img.size()
+            u = beta.rsample((batch, nsamples, c, h, w)).type_as(img) - 0.5
             img = img.unsqueeze(1) + u
     # normalize
     img = img.div(n_bins)
