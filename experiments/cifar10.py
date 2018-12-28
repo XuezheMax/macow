@@ -230,15 +230,17 @@ if args.recover:
     start_epoch = checkpoint['epoch']
     patient = checkpoint['patient']
     best_epoch = checkpoint['best_epoch']
-    best_nll_mc = checkpoint['best_nll']
-    best_bpd_mc = checkpoint['best_bpd']
+    best_nll_mc = checkpoint['best_nll_mc']
+    best_bpd_mc = checkpoint['best_bpd_mc']
+    best_nll_iw = checkpoint['best_nll_iw']
+    best_bpd_iw = checkpoint['best_bpd_iw']
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
     del checkpoint
 
     with torch.no_grad():
-        _, best_nll_iw, _, best_bpd_iw = eval(test_loader, test_k)
+        eval(test_loader, test_k)
 else:
     params = json.load(open(args.config, 'r'))
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
