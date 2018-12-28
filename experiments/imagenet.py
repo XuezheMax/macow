@@ -240,6 +240,7 @@ if args.recover:
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
+    del checkpoint
 
     with torch.no_grad():
         eval(test_loader, test_k)

@@ -235,6 +235,7 @@ if args.recover:
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
+    del checkpoint
 
     with torch.no_grad():
         _, best_nll_iw, _, best_bpd_iw = eval(test_loader, test_k)
