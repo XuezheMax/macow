@@ -34,6 +34,7 @@ parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number o
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--noise', type=float, default=2.0, help='alpha and beta parameters for Beta distribution')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
@@ -80,6 +81,8 @@ test_index = np.arange(len(test_data))
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=500, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
+beta = torch.distributions.beta.Beta(args.noise, args.noise)
+entropy = beta.entropy()
 
 print(len(train_index))
 print(len(test_index))
@@ -95,7 +98,7 @@ def get_optimizer(learning_rate, parameters):
 
 
 def train(epoch):
-    print('Epoch: %d (lr=%.6f (%s), patient=%d' % (epoch, lr, opt, patient))
+    print('Epoch: %d (lr=%.6f (%s), patient=%d), entropy=%.4f' % (epoch, lr, opt, patient, entropy))
     fgen.train()
     nll = 0
     num_insts = 0
@@ -103,7 +106,7 @@ def train(epoch):
     num_nans = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
-        data = preprocess(data.to(device, non_blocking=True), n_bits, True)
+        data = preprocess(data.to(device, non_blocking=True), n_bits, beta)
         batch_size = len(data)
         optimizer.zero_grad()
         nll_batch = 0
@@ -133,7 +136,7 @@ def train(epoch):
             sys.stdout.write("\b" * num_back)
             sys.stdout.write(" " * num_back)
             sys.stdout.write("\b" * num_back)
-            train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
+            train_nll = nll / num_insts + (np.log(n_bins / 2.) - entropy) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
@@ -145,7 +148,7 @@ def train(epoch):
     sys.stdout.write("\b" * num_back)
     sys.stdout.write(" " * num_back)
     sys.stdout.write("\b" * num_back)
-    train_nll = nll / num_insts + np.log(n_bins / 2.) * nx
+    train_nll = nll / num_insts + (np.log(n_bins / 2.) - entropy) * nx
     bits_per_pixel = train_nll / (nx * np.log(2.0))
     print('Average NLL: {:.2f}, BPD: {:.4f}, time: {:.1f}s'.format(train_nll, bits_per_pixel, time.time() - start_time))
 
@@ -157,11 +160,9 @@ def eval(data_loader, k):
     num_insts = 0
     for i, (data, _) in enumerate(data_loader):
         # [batch, channels, H, W]
-        data = preprocess(data.to(device, non_blocking=True), n_bits, False)
         batch, c, h, w = data.size()
         # [batch, k, channels, H, W]
-        data = data.unsqueeze(1) + data.new_empty(batch, k, c, h, w).uniform_(-1. / n_bins, 1. / n_bins)
-
+        data = preprocess(data.to(device, non_blocking=True), n_bits, beta, nsamples=k)
         # [batch * k, channels, H, W] -> [batch * k] -> [batch, k]
         log_probs = fgen.log_probability(data.view(batch * k, c, h, w)).view(batch, k)
 
@@ -169,9 +170,9 @@ def eval(data_loader, k):
         nll_mc -= log_probs.mean(dim=1).sum().item()
         nll_iw -= (logsumexp(log_probs, dim=1) - math.log(k)).sum().item()
 
-    nll_mc = nll_mc / num_insts + np.log(n_bins / 2.) * nx
+    nll_mc = nll_mc / num_insts + (np.log(n_bins / 2.) - entropy) * nx
     bpd_mc = nll_mc / (nx * np.log(2.0))
-    nll_iw = nll_iw / num_insts + np.log(n_bins / 2.) * nx
+    nll_iw = nll_iw / num_insts + (np.log(n_bins / 2.) - entropy) * nx
     bpd_iw = nll_iw / (nx * np.log(2.0))
 
     print('Avg  NLL: {:.2f}, {:.2f}, BPD: {:.4f}, {:.4f}'.format(nll_mc, nll_iw, bpd_mc, bpd_iw))
@@ -184,7 +185,7 @@ def reconstruct(epoch):
     n = 64
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(img.to(device), n_bits, False)
+    img = preprocess(img.to(device), n_bits, None)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -232,14 +233,16 @@ if args.recover:
     start_epoch = checkpoint['epoch']
     patient = checkpoint['patient']
     best_epoch = checkpoint['best_epoch']
-    best_nll_mc = checkpoint['best_nll']
-    best_bpd_mc = checkpoint['best_bpd']
+    best_nll_mc = checkpoint['best_nll_mc']
+    best_bpd_mc = checkpoint['best_bpd_mc']
+    best_nll_iw = checkpoint['best_nll_iw']
+    best_bpd_iw = checkpoint['best_bpd_iw']
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
 
     with torch.no_grad():
-        _, best_nll_iw, _, best_bpd_iw = eval(test_loader, test_k)
+        eval(test_loader, test_k)
 else:
     params = json.load(open(args.config, 'r'))
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
@@ -252,7 +255,7 @@ else:
     for _ in range(init_iter):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
         init_data, _ = get_batch(train_data, init_index)
-        init_data = preprocess(init_data, n_bits, True).to(device)
+        init_data = preprocess(init_data, n_bits, beta).to(device)
         fgen.init(init_data, init_scale=1.0)
     # create shadow mae for ema
     # params = json.load(open(args.config, 'r'))
