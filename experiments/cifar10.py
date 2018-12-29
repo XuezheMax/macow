@@ -34,7 +34,7 @@ parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number o
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--noise', type=float, default=2.0, help='alpha and beta parameters for Beta distribution')
+parser.add_argument('--noise', type=float, default=1.0, help='alpha and beta parameters for Beta distribution')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
