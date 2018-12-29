@@ -34,7 +34,6 @@ parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number o
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--noise', type=float, default=1.0, help='alpha and beta parameters for Beta distribution')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
@@ -78,8 +77,8 @@ test_index = np.arange(len(test_data))
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
 test_loader = DataLoader(test_data, batch_size=500, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
-beta = torch.distributions.beta.Beta(args.noise, args.noise)
-entropy = beta.entropy()
+uniform = torch.distributions.uniform.Uniform(0, 1)
+entropy = uniform.entropy()
 
 print(len(train_index))
 print(len(test_index))
@@ -103,7 +102,7 @@ def train(epoch):
     num_nans = 0
     start_time = time.time()
     for batch_idx, (data, _) in enumerate(train_loader):
-        data = preprocess(data.to(device, non_blocking=True), n_bits, beta)
+        data = preprocess(data.to(device, non_blocking=True), n_bits, uniform)
         batch_size = len(data)
         optimizer.zero_grad()
         nll_batch = 0
@@ -159,7 +158,7 @@ def eval(data_loader, k):
         # [batch, channels, H, W]
         batch, c, h, w = data.size()
         # [batch, k, channels, H, W]
-        data = preprocess(data.to(device, non_blocking=True), n_bits, beta, nsamples=k)
+        data = preprocess(data.to(device, non_blocking=True), n_bits, uniform, nsamples=k)
         # [batch * k, channels, H, W] -> [batch * k] -> [batch, k]
         log_probs = fgen.log_probability(data.view(batch * k, c, h, w)).view(batch, k)
 
@@ -249,7 +248,7 @@ else:
     init_batch_size = 2048
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
-    init_data = preprocess(init_data, n_bits, beta).to(device)
+    init_data = preprocess(init_data, n_bits, uniform).to(device)
     fgen.eval()
     fgen.init(init_data, init_scale=1.0)
     # create shadow mae for ema
