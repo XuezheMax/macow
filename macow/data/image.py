@@ -154,13 +154,13 @@ def preprocess(img, n_bits, beta, nsamples=1):
         img = torch.floor(img.div(256. / n_bins))
 
     if beta is not None:
-        # add noise (-0.5, 0.5)
+        # add noise (0, 1)
         if nsamples == 1:
-            u = beta.rsample(img.size()).type_as(img) - 0.5
+            u = beta.rsample(img.size()).type_as(img)
             img = img + u
         else:
             batch, c, h, w = img.size()
-            u = beta.rsample((batch, nsamples, c, h, w)).type_as(img) - 0.5
+            u = beta.rsample((batch, nsamples, c, h, w)).type_as(img)
             img = img.unsqueeze(1) + u
     # normalize
     img = img.div(n_bins)
@@ -187,6 +187,6 @@ def postprocess(img, n_bits):
     img = img.mul(0.5) + 0.5
     img = img.mul(n_bins)
     # scale
-    img = torch.round(img) * (256. / n_bins)
+    img = torch.floor(img) * (256. / n_bins)
     img = img.clamp(0, 255).div(255)
     return img
