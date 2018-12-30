@@ -95,7 +95,7 @@ def train(epoch):
     print('Epoch: %d (lr=%.6f (%s), patient=%d)' % (epoch, lr, opt, patient))
     fgen.train()
     nll = 0
-    entropy = 0
+    nent = 0
     num_insts = 0
     num_back = 0
     num_nans = 0
@@ -104,24 +104,22 @@ def train(epoch):
         batch_size = len(data)
         optimizer.zero_grad()
         data = data.to(device, non_blocking=True)
-        entropy_batch = 0
         nll_batch = 0
+        nent_batch = 0
         data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
         for data in data_list:
             # [batch, 1]
-            ent, noise = fgen.dequantize(data)
-            ent = ent.sum()
+            noise, log_probs_posterior = fgen.dequantize(data)
+            # [batch] -> [1]
+            log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
             # [batch]
-            print(noise.size())
-            print(data.size())
-            input()
             data = preprocess(data, n_bits, noise)
             log_probs = fgen.log_probability(data).sum()
-            loss = (log_probs + ent) * (-1.0 / batch_size)
+            loss = (log_probs_posterior - log_probs) / batch_size
             loss.backward()
             with torch.no_grad():
                 nll_batch -= log_probs.item()
-                entropy_batch += ent.item()
+                nent_batch += log_probs_posterior.item()
 
         if grad_clip > 0:
             grad_norm = clip_grad_norm_(fgen.parameters(), grad_clip)
@@ -136,19 +134,19 @@ def train(epoch):
             # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay)
             num_insts += batch_size
             nll += nll_batch
-            entropy += entropy_batch
+            nent += nent_batch
 
         if batch_idx % args.log_interval == 0:
             sys.stdout.write("\b" * num_back)
             sys.stdout.write(" " * num_back)
             sys.stdout.write("\b" * num_back)
-            train_entropy = entropy / num_insts
-            train_nll = nll / num_insts + train_entropy + np.log(n_bins / 2.) * nx
+            train_nent = nent / num_insts
+            train_nll = nll / num_insts + train_nent + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
-            entropy_per_pixel = train_entropy / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}, Entropy: {:2f}, EPD: {:.4f}'.format(
+            nent_per_pixel = train_nent / (nx * np.log(2.0))
+            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:2f}, NEPD: {:.4f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
-                train_nll, bits_per_pixel, train_entropy, entropy_per_pixel)
+                train_nll, bits_per_pixel, train_nent, nent_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
             num_back = len(log_info)
@@ -156,17 +154,17 @@ def train(epoch):
     sys.stdout.write("\b" * num_back)
     sys.stdout.write(" " * num_back)
     sys.stdout.write("\b" * num_back)
-    train_entropy = entropy / num_insts
-    train_nll = nll / num_insts + train_entropy + np.log(n_bins / 2.) * nx
+    train_nent = nent / num_insts
+    train_nll = nll / num_insts + train_nent + np.log(n_bins / 2.) * nx
     bits_per_pixel = train_nll / (nx * np.log(2.0))
-    entropy_per_pixel = train_entropy / (nx * np.log(2.0))
-    print('Average NLL: {:.2f}, BPD: {:.4f}, Entropy: {:2f}, EPD: {:.4f}, time: {:.1f}s'.format(
-        train_nll, bits_per_pixel, train_entropy, entropy_per_pixel, time.time() - start_time))
+    nent_per_pixel = train_nent / (nx * np.log(2.0))
+    print('Average NLL: {:.2f}, BPD: {:.4f}, NENT: {:2f}, NEPD: {:.4f}, time: {:.1f}s'.format(
+        train_nll, bits_per_pixel, train_nent, nent_per_pixel, time.time() - start_time))
 
 
 def eval(data_loader, k):
     fgen.eval()
-    entropy = 0
+    nent = 0
     nll_mc = 0
     nll_iw = 0
     num_insts = 0
@@ -175,28 +173,29 @@ def eval(data_loader, k):
         # [batch, channels, H, W]
         batch, c, h, w = data.size()
         # [batch, k]
-        entropy_batch, noise = fgen.dequantize(data, nsamples=k)
+        noise, log_probs_posterior = fgen.dequantize(data, nsamples=k)
         # [batch, k, channels, H, W]
         data = preprocess(data, n_bits, noise)
         # [batch * k, channels, H, W] -> [batch * k] -> [batch, k]
         log_probs = fgen.log_probability(data.view(batch * k, c, h, w)).view(batch, k)
+        # [batch, k]
+        log_iw = log_probs - log_probs_posterior
 
         num_insts += batch
-        entropy += entropy_batch.sum().item()
-        log_probs = log_probs - entropy_batch
-        nll_mc -= log_probs.mean(dim=1).sum().item()
-        nll_iw -= (logsumexp(log_probs, dim=1) - math.log(k)).sum().item()
+        nent += log_probs_posterior.mean(dim=1).sum().item()
+        nll_mc -= log_iw.mean(dim=1).sum().item()
+        nll_iw += (math.log(k) - logsumexp(log_iw, dim=1)).sum().item()
 
-    entropy = entropy / num_insts
-    epd = entropy / (nx * np.log(2.0))
+    nent = nent / num_insts
+    nepd = nent / (nx * np.log(2.0))
     nll_mc = nll_mc / num_insts + np.log(n_bins / 2.) * nx
     bpd_mc = nll_mc / (nx * np.log(2.0))
     nll_iw = nll_iw / num_insts + np.log(n_bins / 2.) * nx
     bpd_iw = nll_iw / (nx * np.log(2.0))
 
-    print('Avg  NLL: {:.2f}, Entropy: {:2f}, IW: {:.2f}, BPD: {:.4f}, EPD: {:.4f}, BPD_IW: {:.4f}'.format(
-        nll_mc, entropy, nll_iw, bpd_mc, epd, bpd_iw))
-    return nll_mc, entropy, nll_iw, bpd_mc, epd, bpd_iw
+    print('Avg  NLL: {:.2f}, NENT: {:2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}'.format(
+        nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw))
+    return nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw
 
 
 def reconstruct(epoch):
@@ -257,8 +256,8 @@ if args.recover:
     best_bpd_mc = checkpoint['best_bpd_mc']
     best_nll_iw = checkpoint['best_nll_iw']
     best_bpd_iw = checkpoint['best_bpd_iw']
-    best_entropy = checkpoint['best_entropy']
-    best_epd = checkpoint['best_epd']
+    best_nent = checkpoint['best_nent']
+    best_nepd = checkpoint['best_nepd']
     fgen.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
@@ -294,8 +293,8 @@ else:
     best_bpd_mc = 1e12
     best_nll_iw = 1e12
     best_bpd_iw = 1e12
-    best_entropy = 1e12
-    best_epd = 1e12
+    best_nent = 1e12
+    best_nepd = 1e12
 
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
@@ -307,7 +306,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('-' * 80)
     if epoch < 11 or (epoch < 5000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
         with torch.no_grad():
-            nll_mc, entropy, nll_iw, bpd_mc, epd, bpd_iw = eval(test_loader, test_k)
+            nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw = eval(test_loader, test_k)
 
         if nll_iw < best_nll_iw:
             patient = 0
@@ -318,8 +317,8 @@ for epoch in range(start_epoch, args.epochs + 1):
             best_nll_iw = nll_iw
             best_bpd_mc = bpd_mc
             best_bpd_iw = bpd_iw
-            best_entropy = entropy
-            epd = best_epd
+            best_nent = nent
+            best_nepd = nepd
 
             with torch.no_grad():
                 reconstruct(epoch)
@@ -327,8 +326,8 @@ for epoch in range(start_epoch, args.epochs + 1):
         else:
             patient += 1
 
-    print('Best NLL: {:.2f}, Entropy: {:2f}, IW: {:.2f}, BPD: {:.4f}, EPD: {:.4f}, BPD_IW: {:.4f}, epoch: {}'.format(
-        best_nll_mc, best_entropy, best_nll_iw, best_bpd_mc, best_epd, best_bpd_iw, best_epoch))
+    print('Best NLL: {:.2f}, NENT: {:2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}, epoch: {}'.format(
+        best_nll_mc, best_nent, best_nll_iw, best_bpd_mc, best_nepd, best_bpd_iw, best_epoch))
     print('=' * 80)
 
     if epoch == warmups:
@@ -346,8 +345,8 @@ for epoch in range(start_epoch, args.epochs + 1):
                       'best_bpd_mc': best_bpd_mc,
                       'best_nll_iw': best_nll_iw,
                       'best_bpd_iw': best_bpd_iw,
-                      'best_entropy': best_entropy,
-                      'best_epd': best_epd,
+                      'best_nent': best_nent,
+                      'best_nepd': best_nepd,
                       'patient': patient}
         torch.save(checkpoint, checkpoint_name)
 
