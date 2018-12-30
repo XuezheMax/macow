@@ -28,7 +28,7 @@ class FlowGenModel(nn.Module):
 
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, nsamples, channels, H, W]
-        return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zero(x.size(0), nsamples)
+        return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zeros(x.size(0), nsamples)
 
     def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         """
