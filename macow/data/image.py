@@ -155,9 +155,6 @@ def preprocess(img, n_bits, noise):
 
     # [batch, nsamples, channels, H, W]
     img = img.unsqueeze(1) + noise
-    # nsamples = 1
-    if img.size(1) == 1:
-        img.squeeze(1)
     # normalize
     img = img.div(n_bins)
     img = (img - 0.5).div(0.5)

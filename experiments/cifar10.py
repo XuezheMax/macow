@@ -110,14 +110,9 @@ def train(epoch):
         for data in data_list:
             # [batch, 1]
             noise, log_probs_posterior = fgen.dequantize(data)
-            print(noise.size())
             # [batch] -> [1]
             log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
-            print(data.size())
-            data = preprocess(data, n_bits, noise)
-            print(data.size())
-            input()
-            # [batch]
+            data = preprocess(data, n_bits, noise).squeeze(1)
             log_probs = fgen.log_probability(data).sum()
             loss = (log_probs_posterior - log_probs) / batch_size
             loss.backward()
@@ -208,7 +203,7 @@ def reconstruct(epoch):
     n = 128
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(img.to(device), n_bits, None)
+    img = preprocess(img.to(device), n_bits, 0).squeeze(1)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -277,7 +272,7 @@ else:
     init_batch_size = 2048
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
-    init_data = preprocess(init_data, n_bits, 0.).to(device)
+    init_data = preprocess(init_data.to(device), n_bits, 0.).squeeze(1)
     fgen.eval()
     fgen.init(init_data.squeeze(1), init_scale=1.0)
     # create shadow mae for ema
