@@ -24,7 +24,7 @@ from macow.utils import exponentialMovingAverage, total_grad_norm, logsumexp
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
-parser.add_argument('--batch-size', type=int, default=160, metavar='N', help='input batch size for training (default: 160)')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 160)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
@@ -147,7 +147,7 @@ def train(epoch):
             train_nll = nll / num_insts + train_nent + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             nent_per_pixel = train_nent / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:2f}, NEPD: {:.4f}'.format(
+            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
                 train_nll, bits_per_pixel, train_nent, nent_per_pixel)
             sys.stdout.write(log_info)
@@ -161,7 +161,7 @@ def train(epoch):
     train_nll = nll / num_insts + train_nent + np.log(n_bins / 2.) * nx
     bits_per_pixel = train_nll / (nx * np.log(2.0))
     nent_per_pixel = train_nent / (nx * np.log(2.0))
-    print('Average NLL: {:.2f}, BPD: {:.4f}, NENT: {:2f}, NEPD: {:.4f}, time: {:.1f}s'.format(
+    print('Average NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}, time: {:.1f}s'.format(
         train_nll, bits_per_pixel, train_nent, nent_per_pixel, time.time() - start_time))
 
 
@@ -196,7 +196,7 @@ def eval(data_loader, k):
     nll_iw = nll_iw / num_insts + np.log(n_bins / 2.) * nx
     bpd_iw = nll_iw / (nx * np.log(2.0))
 
-    print('Avg  NLL: {:.2f}, NENT: {:2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}'.format(
+    print('Avg  NLL: {:.2f}, NENT: {:.2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}'.format(
         nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw))
     return nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw
 
@@ -308,7 +308,7 @@ lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch)
-    print('-' * 80)
+    print('-' * 100)
     with torch.no_grad():
         nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw = eval(test_loader, test_k)
 
@@ -330,9 +330,9 @@ for epoch in range(start_epoch, args.epochs + 1):
     else:
         patient += 1
 
-    print('Best NLL: {:.2f}, NENT: {:2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}, epoch: {}'.format(
+    print('Best NLL: {:.2f}, NENT: {:.2f}, IW: {:.2f}, BPD: {:.4f}, NEPD: {:.4f}, BPD_IW: {:.4f}, epoch: {}'.format(
         best_nll_mc, best_nent, best_nll_iw, best_bpd_mc, best_nepd, best_bpd_iw, best_epoch))
-    print('=' * 80)
+    print('=' * 100)
 
     if epoch == warmups:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
@@ -362,6 +362,6 @@ final_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=ar
 with torch.no_grad():
     print('Final test:')
     eval(final_loader, 512)
-    print('-' * 80)
+    print('-' * 100)
     reconstruct('final')
     sample('final')
