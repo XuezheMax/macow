@@ -26,9 +26,15 @@ class FlowGenModel(nn.Module):
         if ngpu > 1:
             self.flow = DataParallelFlow(self.flow, device_ids=list(range(ngpu)))
 
+        self.beta = torch.distributions.beta.Beta(2, 2)
+
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, nsamples, channels, H, W]
-        return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zeros(x.size(0), nsamples)
+        # return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zeros(x.size(0), nsamples)
+        noise = self.beta.rsample((x.size(0), nsamples, *x.size()[1:]))
+        log_posterior = self.beta.log_prob(noise)
+        log_posterior = log_posterior.view(x.size(0), nsamples, -1).sum(dim=2)
+        return noise, log_posterior
 
     def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         """
