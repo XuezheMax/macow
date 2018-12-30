@@ -146,22 +146,18 @@ def binarize_data(data):
     return [(binarize_image(img), label) for img, label in data]
 
 
-def preprocess(img, n_bits, noise, nsamples=1):
+def preprocess(img, n_bits, noise):
     n_bins = 2. ** n_bits
     # rescale to 255
     img = img.mul(255)
     if n_bits < 8:
         img = torch.floor(img.div(256. / n_bins))
 
-    if noise is not None:
-        # add noise (0, 1)
-        if nsamples == 1:
-            u = noise.rsample(img.size()).type_as(img)
-            img = img + u
-        else:
-            batch, c, h, w = img.size()
-            u = noise.rsample((batch, nsamples, c, h, w)).type_as(img)
-            img = img.unsqueeze(1) + u
+    # [batch, nsamples, channels, H, W]
+    img = img.unsqueeze(1) + noise
+    # nsamples = 1
+    if img.size(1) == 1:
+        img.squeeze(1)
     # normalize
     img = img.div(n_bins)
     img = (img - 0.5).div(0.5)
@@ -169,9 +165,9 @@ def preprocess(img, n_bits, noise, nsamples=1):
 
 
 def preprocess_full(img, noisy):
-    img8bits = preprocess(img, 8, False)
-    img5bits = preprocess(img, 5, False)
-    img3bits = preprocess(img, 3, False)
+    img8bits = preprocess(img, 8, 0.)
+    img5bits = preprocess(img, 5, 0.)
+    img3bits = preprocess(img, 3, 0.)
     # add noise
     if noisy:
         eps = img.new_empty(img.size()).uniform_(-1., 1.)

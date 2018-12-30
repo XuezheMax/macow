@@ -2,6 +2,7 @@ __author__ = 'max'
 
 import os
 import json
+import numbers
 import math
 from typing import Dict, Tuple
 import torch
@@ -24,6 +25,10 @@ class FlowGenModel(nn.Module):
         self.ngpu = ngpu
         if ngpu > 1:
             self.flow = DataParallelFlow(self.flow, device_ids=list(range(ngpu)))
+
+    def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
+        # [batch, nsamples, channels, H, W]
+        return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zero(x.size(0), nsamples)
 
     def encode(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
         """
