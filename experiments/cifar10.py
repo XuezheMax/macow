@@ -274,7 +274,7 @@ else:
     init_data, _ = get_batch(train_data, init_index)
     init_data = preprocess(init_data.to(device), n_bits, 0.).squeeze(1)
     fgen.eval()
-    fgen.init(init_data.squeeze(1), init_scale=1.0)
+    fgen.init(init_data, init_scale=1.0)
     # create shadow mae for ema
     # params = json.load(open(args.config, 'r'))
     # fgen_shadow = FlowGenModel.from_params(params).to(device)
