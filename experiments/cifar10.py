@@ -110,10 +110,14 @@ def train(epoch):
         for data in data_list:
             # [batch, 1]
             noise, log_probs_posterior = fgen.dequantize(data)
+            print(noise.size())
             # [batch] -> [1]
             log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
-            # [batch]
+            print(data.size())
             data = preprocess(data, n_bits, noise)
+            print(data.size())
+            input()
+            # [batch]
             log_probs = fgen.log_probability(data).sum()
             loss = (log_probs_posterior - log_probs) / batch_size
             loss.backward()
