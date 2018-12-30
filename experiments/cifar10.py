@@ -112,6 +112,9 @@ def train(epoch):
             ent, noise = fgen.dequantize(data)
             ent = ent.sum()
             # [batch]
+            print(noise.size())
+            print(data.size())
+            input()
             data = preprocess(data, n_bits, noise)
             log_probs = fgen.log_probability(data).sum()
             loss = (log_probs + ent) * (-1.0 / batch_size)
