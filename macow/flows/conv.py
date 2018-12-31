@@ -25,7 +25,7 @@ class Conv1x1Flow(Flow):
         nn.init.orthogonal_(self.weight)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -45,7 +45,7 @@ class Conv1x1Flow(Flow):
         return out, logdet * H * W
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -65,7 +65,7 @@ class Conv1x1Flow(Flow):
         return out, logdet * H * W * -1.0
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             return self.forward(data)
 
@@ -99,7 +99,7 @@ class Conv1x1WeightNormFlow(Flow):
         return weight
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -120,7 +120,7 @@ class Conv1x1WeightNormFlow(Flow):
         return out, logdet * H * W
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
@@ -141,7 +141,7 @@ class Conv1x1WeightNormFlow(Flow):
         return out, logdet * H * W * -1.0
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             # [batch, n_channels, H, W]
             out, _ = self.forward(data)
@@ -168,7 +168,7 @@ class MaskedConvFlow(Flow):
     Masked Convolutional Flow
     """
 
-    def __init__(self, in_channels, kernel_size, hidden_channels=None, order='A', scale=True, inverse=False):
+    def __init__(self, in_channels, kernel_size, hidden_channels=None, s_channels=None, order='A', scale=True, inverse=False):
         super(MaskedConvFlow, self).__init__(inverse)
         assert order in {'A', 'B'}, 'unknown order: {}'.format(order)
         self.in_channels = in_channels
@@ -180,14 +180,21 @@ class MaskedConvFlow(Flow):
             out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
         self.order = order
-        self.net = nn.Sequential(
+        self.net = nn.ModuleList([
             MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order),
             nn.ELU(inplace=True),
             Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
-        )
+        ])
+        if s_channels is None or s_channels <= 0:
+            self.s_conv = None
+        else:
+            self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net[0].padding)
 
-    def calc_mu_and_scale(self, input: torch.Tensor, h=None):
-        mu = self.net(input)
+    def calc_mu_and_scale(self, input: torch.Tensor, s=None):
+        c = self.net[0](input)
+        if s is not None:
+            c = c + s
+        mu = self.net[2](self.net[1](c))
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
@@ -195,8 +202,10 @@ class MaskedConvFlow(Flow):
             # scale = log_scale.tanh_() + 1.0
         return mu, scale
 
-    def init_net(self, x, h=None, init_scale=1.0):
+    def init_net(self, x, s=None, init_scale=1.0):
         out = self.net[0].init(x, init_scale=init_scale)
+        if s is not None:
+            out = out + s
         out = self.net[1](out)
         mu = self.net[2].init(out, init_scale=0.0)
         scale = None
@@ -207,13 +216,13 @@ class MaskedConvFlow(Flow):
         return mu, scale
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
+            s: Tensor
                 conditional input (default: None)
 
         Returns: out: Tensor , logdet: Tensor
@@ -221,7 +230,9 @@ class MaskedConvFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        mu, scale = self.calc_mu_and_scale(input, h=h)
+        if self.s_conv is not None:
+            s = self.s_conv(s)
+        mu, scale = self.calc_mu_and_scale(input, s=s)
         out = input
         if self.scale:
             out = out.mul(scale)
@@ -231,7 +242,7 @@ class MaskedConvFlow(Flow):
         out = out + mu
         return out, logdet
 
-    def backward_A(self, input: torch.Tensor, h=None) -> torch.Tensor:
+    def backward_A(self, input: torch.Tensor, s=None) -> torch.Tensor:
         batch, channels, H, W = input.size()
         out = input.new_zeros(batch, channels, H, W)
 
@@ -245,15 +256,16 @@ class MaskedConvFlow(Flow):
                 tj = min(W, j + cW + 1)
                 input_curr = input[:, :, si:i+1, sj:tj]
                 out_curr = out[:, :, si:i+1, sj:tj]
+                s_curr = s if s is None else s[:, :, si:i+1, sj:tj]
                 # [batch, channels, cH, cW]
-                mu, scale = self.calc_mu_and_scale(out_curr, h=h)
+                mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
                 new_out = input_curr - mu
                 if self.scale:
                     new_out = new_out.div(scale + 1e-12)
                 out[:, :, i, j] = new_out[:, :, -1, j - sj]
         return out
 
-    def backward_B(self, input: torch.Tensor, h=None) -> torch.Tensor:
+    def backward_B(self, input: torch.Tensor, s=None) -> torch.Tensor:
         batch, channels, H, W = input.size()
         out = input.new_zeros(batch, channels, H, W)
 
@@ -267,8 +279,9 @@ class MaskedConvFlow(Flow):
                 tj = min(W, j + cW + 1)
                 input_curr = input[:, :, i:si, sj:tj]
                 out_curr = out[:, :, i:si, sj:tj]
+                s_curr = s if s is None else s[:, :, i:si, sj:tj]
                 # [batch, channels, cH, cW]
-                mu, scale = self.calc_mu_and_scale(out_curr, h=h)
+                mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
                 new_out = input_curr - mu
                 if self.scale:
                     new_out = new_out.div(scale + 1e-12)
@@ -276,13 +289,13 @@ class MaskedConvFlow(Flow):
         return out
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
+            s: Tensor
                 conditional input (default: None)
 
         Returns: out: Tensor , logdet: Tensor
@@ -290,16 +303,22 @@ class MaskedConvFlow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
 
         """
-        if self.order == 'A':
-            out = self.backward_A(input, h=h)
+        if self.s_conv is not None:
+            ss = self.s_conv(s)
         else:
-            out = self.backward_B(input, h=h)
-        _, logdet = self.forward(out, h=h)
+            ss = s
+        if self.order == 'A':
+            out = self.backward_A(input, s=ss)
+        else:
+            out = self.backward_B(input, s=ss)
+        _, logdet = self.forward(out, s=s)
         return out, logdet.mul(-1.0)
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        mu, scale = self.init_net(data, h=h, init_scale=init_scale)
+    def init(self, data, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.s_conv is not None:
+            s = self.s_conv.init(s, init_scale=init_scale)
+        mu, scale = self.init_net(data, s=s, init_scale=init_scale)
         out = data
         if self.scale:
             out = out.mul(scale)

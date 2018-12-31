@@ -11,15 +11,18 @@ from macow.nnet import Conv2dWeightNorm
 
 
 class ResNetBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, dropout=0.0):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dropout=0.0):
         super(ResNetBlock, self).__init__()
-        self.conv1 = Conv2dWeightNorm(in_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
+        self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.dropout = nn.Dropout(dropout)
 
-    def init(self, x, init_scale=1.0):
+    def init(self, x, s=None, init_scale=1.0):
+        if s is not None:
+            x = torch.cat([x, s], dim=1)
+
         out = self.activation(self.conv1.init(x, init_scale=init_scale))
 
         out = self.activation(self.conv2.init(out, init_scale=init_scale))
@@ -28,7 +31,10 @@ class ResNetBlock(nn.Module):
 
         return out
 
-    def forward(self, x):
+    def forward(self, x, s=None):
+        if s is not None:
+            x = torch.cat([x, s], dim=1)
+
         out = self.activation(self.conv1(x))
 
         out = self.activation(self.conv2(out))
@@ -38,7 +44,7 @@ class ResNetBlock(nn.Module):
 
 
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, scale=True, inverse=False, dropout=0.0, factor=2):
+    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dropout=0.0, factor=2):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
@@ -49,18 +55,20 @@ class NICE(Flow):
         self.z1_channels = in_channels
         if scale:
             out_channels = out_channels * 2
-        self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, dropout=dropout)
+        if s_channels is None:
+            s_channels = 0
+        self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dropout=dropout)
 
-    def calc_mu_and_scale(self, z1: torch.Tensor, h=None):
-        mu = self.net(z1)
+    def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
+        mu = self.net(z1, s=s)
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
         return mu, scale
 
-    def init_net(self, z1: torch.Tensor, h=None, init_scale=1.0):
-        mu = self.net.init(z1, init_scale=init_scale)
+    def init_net(self, z1: torch.Tensor, s=None, init_scale=1.0):
+        mu = self.net.init(z1, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
@@ -68,13 +76,13 @@ class NICE(Flow):
         return mu, scale
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
+            s: Tensor
                 conditional input (default: None)
 
         Returns: out: Tensor , logdet: Tensor
@@ -85,7 +93,7 @@ class NICE(Flow):
         # [batch, in_channels, H, W]
         z1 = input[:, :self.z1_channels]
         z2 = input[:, self.z1_channels:]
-        mu, scale = self.calc_mu_and_scale(z1, h)
+        mu, scale = self.calc_mu_and_scale(z1, s)
         if self.scale:
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)
@@ -95,13 +103,13 @@ class NICE(Flow):
         return torch.cat([z1, z2], dim=1), logdet
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
 
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
+            s: Tensor
                 conditional input (default: None)
 
         Returns: out: Tensor , logdet: Tensor
@@ -111,7 +119,7 @@ class NICE(Flow):
         """
         z1 = input[:, :self.z1_channels]
         z2 = input[:, self.z1_channels:]
-        mu, scale = self.calc_mu_and_scale(z1, h)
+        mu, scale = self.calc_mu_and_scale(z1, s)
         z2 = z2 - mu
         if self.scale:
             z2 = z2.div(scale + 1e-12)
@@ -122,11 +130,11 @@ class NICE(Flow):
         return torch.cat([z1, z2], dim=1), logdet
 
     @overrides
-    def init(self, data: torch.Tensor, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data: torch.Tensor, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, in_channels, H, W]
         z1 = data[:, :self.z1_channels]
         z2 = data[:, self.z1_channels:]
-        mu, scale = self.init_net(z1, h=h, init_scale=init_scale)
+        mu, scale = self.init_net(z1, s=s, init_scale=init_scale)
         if self.scale:
             z2 = z2.mul(scale)
             logdet = scale.log().view(z1.size(0), -1).sum(dim=1)

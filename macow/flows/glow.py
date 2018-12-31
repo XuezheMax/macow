@@ -17,41 +17,41 @@ class GlowStep(Flow):
     """
     A step of Glow. A Conv1x1 followed with a NICE
     """
-    def __init__(self, in_channels, hidden_channels=512, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, dropout=0.0):
         super(GlowStep, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dropout=dropout)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.actnorm.forward(input, h=h)
+    def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        out, logdet_accum = self.actnorm.forward(input)
 
-        out, logdet = self.conv1x1.forward(out, h=h)
+        out, logdet = self.conv1x1.forward(out)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.coupling.forward(out, h=h)
+        out, logdet = self.coupling.forward(out, s=s)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.coupling.backward(input)
+    def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        out, logdet_accum = self.coupling.backward(input, s=s)
 
-        out, logdet = self.conv1x1.backward(out, h=h)
+        out, logdet = self.conv1x1.backward(out)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.actnorm.backward(out, h=h)
+        out, logdet = self.actnorm.backward(out)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.actnorm.init(data, h=h, init_scale=init_scale)
+    def init(self, data, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        out, logdet_accum = self.actnorm.init(data, init_scale=init_scale)
 
-        out, logdet = self.conv1x1.init(out, h=h, init_scale=init_scale)
+        out, logdet = self.conv1x1.init(out, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
 
-        out, logdet = self.coupling.init(out, h=h, init_scale=init_scale)
+        out, logdet = self.coupling.init(out, s=s, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
@@ -66,31 +66,31 @@ class GlowTopBlock(Flow):
         self.steps = nn.ModuleList(steps)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         out = input
         # [batch]
         logdet_accum = input.new_zeros(input.size(0))
         for step in self.steps:
-            out, logdet = step.forward(out, h=h)
+            out, logdet = step.forward(out)
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         logdet_accum = input.new_zeros(input.size(0))
         out = input
         for step in reversed(self.steps):
-            out, logdet = step.backward(out, h=h)
+            out, logdet = step.backward(out)
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         out = data
         # [batch]
         logdet_accum = data.new_zeros(data.size(0))
         for step in self.steps:
-            out, logdet = step.init(out, h=h, init_scale=init_scale)
+            out, logdet = step.init(out, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
@@ -106,35 +106,35 @@ class GlowInternalBlock(Flow):
         self.prior = NICE(in_channels, scale=True, inverse=inverse)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         out = input
         # [batch]
         logdet_accum = input.new_zeros(input.size(0))
         for step in self.steps:
-            out, logdet = step.forward(out, h=h)
+            out, logdet = step.forward(out)
             logdet_accum = logdet_accum + logdet
-        out, logdet = self.prior.forward(out, h=h)
+        out, logdet = self.prior.forward(out)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch]
-        out, logdet_accum = self.prior.backward(input, h=h)
+        out, logdet_accum = self.prior.backward(input)
         for step in reversed(self.steps):
-            out, logdet = step.backward(out, h=h)
+            out, logdet = step.backward(out)
             logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         out = data
         # [batch]
         logdet_accum = data.new_zeros(data.size(0))
         for step in self.steps:
-            out, logdet = step.init(out, h=h, init_scale=init_scale)
+            out, logdet = step.init(out, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
-        out, logdet = self.prior.init(out, h=h, init_scale=init_scale)
+        out, logdet = self.prior.init(out, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
@@ -162,32 +162,32 @@ class Glow(Flow):
         self.blocks = nn.ModuleList(blocks)
 
     @overrides
-    def forward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         logdet_accum = input.new_zeros(input.size(0))
         out = input
         outputs = []
         for i, block in enumerate(self.blocks):
             out = squeeze2d(out, factor=2)
-            out, logdet = block.forward(out, h=h)
+            out, logdet = block.forward(out)
             logdet_accum = logdet_accum + logdet
             if isinstance(block, GlowInternalBlock):
-                out1, out2 = split2d(out)
+                out1, out2 = split2d(out, out.size(1) // 2)
                 outputs.append(out2)
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
         for _ in range(self.levels - 1):
             out2 = outputs.pop()
-            out = unsqueeze2d(unsplit2d(out, out2), factor=2)
+            out = unsqueeze2d(unsplit2d([out, out2]), factor=2)
         assert len(outputs) == 0
         return out, logdet_accum
 
     @overrides
-    def backward(self, input: torch.Tensor, h=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         outputs = []
         out = squeeze2d(input, factor=2)
         for _ in range(self.levels - 1):
-            out1, out2 = split2d(out)
+            out1, out2 = split2d(out, out.size(1) // 2)
             outputs.append(out2)
             out = squeeze2d(out1, factor=2)
 
@@ -195,31 +195,31 @@ class Glow(Flow):
         for i, block in enumerate(reversed(self.blocks)):
             if isinstance(block, GlowInternalBlock):
                 out2 = outputs.pop()
-                out = unsplit2d(out, out2)
-            out, logdet = block.backward(out, h=h)
+                out = unsplit2d([out, out2])
+            out, logdet = block.backward(out)
             logdet_accum = logdet_accum + logdet
             out = unsqueeze2d(out, factor=2)
         assert len(outputs) == 0
         return out, logdet_accum
 
     @overrides
-    def init(self, data, h=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         logdet_accum = data.new_zeros(data.size(0))
         out = data
         outputs = []
         for i, block in enumerate(self.blocks):
             out = squeeze2d(out, factor=2)
-            out, logdet = block.init(out, h=h, init_scale=init_scale)
+            out, logdet = block.init(out, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
             if isinstance(block, GlowInternalBlock):
-                out1, out2 = split2d(out)
+                out1, out2 = split2d(out, out.size(1) // 2)
                 outputs.append(out2)
                 out = out1
 
         out = unsqueeze2d(out, factor=2)
         for _ in range(self.levels - 1):
             out2 = outputs.pop()
-            out = unsqueeze2d(unsplit2d(out, out2), factor=2)
+            out = unsqueeze2d(unsplit2d([out, out2]), factor=2)
         assert len(outputs) == 0
         return out, logdet_accum
 

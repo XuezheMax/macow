@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from torch.nn.utils import clip_grad_norm_
 
 from macow.data import load_datasets, get_batch, preprocess, postprocess
-from macow.model import FlowGenModel
+from macow.models import FlowGenModel
 from macow.utils import exponentialMovingAverage, total_grad_norm, logsumexp
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
