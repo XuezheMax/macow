@@ -109,7 +109,7 @@ class VDeQuantFlowGenModel(FlowGenModel):
     @overrides
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch * nsamples, channels, H, W]
-        epsilon = torch.randn(x.size(0) * nsamples, *x.size()[1:])
+        epsilon = torch.randn(x.size(0) * nsamples, *x.size()[1:], device=x.device)
         u, logdet = self.dequant_flow.fwdpass(epsilon, x)
         # [batch * nsamples, channels, H, W]
         epsilon = epsilon.view(epsilon.size(0), -1)
