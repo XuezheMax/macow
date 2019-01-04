@@ -6,9 +6,11 @@ import math
 from typing import Dict, Tuple
 import torch
 import torch.nn as nn
+from overrides import overrides
 
 from macow.flows.flow import Flow
 from macow.flows.parallel import DataParallelFlow
+from macow.flows.dequant import DeQuantFlow
 
 
 class FlowGenModel(nn.Module):
@@ -78,7 +80,7 @@ class FlowGenModel(nn.Module):
         # [batch, x_shape] --> [batch, numels]
         z = z.view(z.size(0), -1)
         # [batch]
-        log_probs = z.mul(z).sum(dim=1) + math.log(math.pi * 2.)* z.size(1)
+        log_probs = z.mul(z).sum(dim=1) + math.log(math.pi * 2.) * z.size(1)
         return log_probs.mul(-0.5) + logdet
 
     @classmethod
@@ -104,3 +106,32 @@ class VDeQuantFlowGenModel(FlowGenModel):
         if ngpu > 1:
             self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(range(ngpu)))
 
+    @overrides
+    def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
+        # [batch * nsamples, channels, H, W]
+        epsilon = torch.randn(x.size(0) * nsamples, *x.size()[1:])
+        u, logdet = self.dequant_flow.fwdpass(epsilon, x)
+        # [batch * nsamples, channels, H, W]
+        epsilon = epsilon.view(epsilon.size(0), -1)
+        # [batch * nsamples]
+        log_posteriors = epsilon.mul(epsilon).sum(dim=1) + math.log(math.pi * 2.) * epsilon.size(1)
+        log_posteriors = log_posteriors.mul(-0.5) - logdet
+        return u, log_posteriors.view(x.size(0), nsamples)
+
+    @overrides
+    @classmethod
+    def from_params(cls, params: Dict) -> "VDeQuantFlowGenModel":
+        flow_params = params.pop('flow')
+        flow = Flow.by_name(flow_params.pop('type')).from_params(flow_params)
+        dequant_params = params.pop('dequant')
+        dequant_flow = DeQuantFlow.from_params(dequant_params)
+        return VDeQuantFlowGenModel(flow, dequant_flow, **params)
+
+    @overrides
+    @classmethod
+    def load(cls, model_path, device) -> "VDeQuantFlowGenModel":
+        params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
+        model_name = os.path.join(model_path, 'model.pt')
+        fgen = VDeQuantFlowGenModel.from_params(params)
+        fgen.load_state_dict(torch.load(model_name, map_location=device))
+        return fgen.to(device)

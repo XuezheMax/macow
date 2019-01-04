@@ -18,8 +18,8 @@ from torchvision.utils import save_image
 from torch.nn.utils import clip_grad_norm_
 
 from macow.data import load_datasets, get_batch, preprocess, postprocess
-from macow.models import FlowGenModel
-from macow.utils import exponentialMovingAverage, total_grad_norm, logsumexp
+from macow.models import FlowGenModel, VDeQuantFlowGenModel
+from macow.utils import exponentialMovingAverage, total_grad_norm
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
@@ -36,6 +36,7 @@ parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization meth
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
+parser.add_argument('--dequant', choices=['uniform', 'variational'], help='dequantization method', default='uniform')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
 parser.add_argument('--data_path', help='path for data file.', default=None)
 parser.add_argument('--recover', action='store_true', help='recover the model from disk.')
@@ -186,7 +187,7 @@ def eval(data_loader, k):
         num_insts += batch
         nent += log_probs_posterior.mean(dim=1).sum().item()
         nll_mc -= log_iw.mean(dim=1).sum().item()
-        nll_iw += (math.log(k) - logsumexp(log_iw, dim=1)).sum().item()
+        nll_iw += (math.log(k) - torch.logsumexp(log_iw, dim=1)).sum().item()
 
     nent = nent / num_insts
     nepd = nent / (nx * np.log(2.0))
@@ -243,10 +244,17 @@ lr = args.lr
 warmups = args.warmup_epochs
 step_decay = 0.999998
 grad_clip = args.grad_clip
+dequant = args.dequant
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
-    fgen = FlowGenModel.from_params(params).to(device)
+    if dequant == 'uniform':
+        fgen = FlowGenModel.from_params(params).to(device)
+    elif dequant == 'variational':
+        fgen = VDeQuantFlowGenModel.from_params(params).to(device)
+    else:
+        raise ValueError('unknown dequantization method: %s' % dequant)
+
     optimizer = get_optimizer(lr, fgen.parameters())
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=-1)
 
@@ -270,7 +278,12 @@ if args.recover:
 else:
     params = json.load(open(args.config, 'r'))
     json.dump(params, open(os.path.join(model_path, 'config.json'), 'w'), indent=2)
-    fgen = FlowGenModel.from_params(params).to(device)
+    if dequant == 'uniform':
+        fgen = FlowGenModel.from_params(params).to(device)
+    elif dequant == 'variational':
+        fgen = VDeQuantFlowGenModel.from_params(params).to(device)
+    else:
+        raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
     fgen.eval()
     init_batch_size = 2048 if imageSize == 32 else 1024

@@ -116,21 +116,3 @@ def total_grad_norm(parameters, norm_type=2):
             total_norm += param_norm.item() ** norm_type
         total_norm = total_norm ** (1. / norm_type)
     return total_norm
-
-
-def logsumexp(x, dim=None):
-    """
-    Args:
-        x: A pytorch tensor (any dimension will do)
-        dim: int or None, over which to perform the summation. `None`, the
-             default, performs over all axes.
-    Returns: The result of the log(sum(exp(...))) operation.
-    """
-    if dim is None:
-        xmax = x.max()
-        xmax_ = x.max()
-        return xmax_ + torch.log(torch.exp(x - xmax).sum())
-    else:
-        xmax, _ = x.max(dim, keepdim=True)
-        xmax_, _ = x.max(dim)
-        return xmax_ + torch.log(torch.exp(x - xmax).sum(dim))

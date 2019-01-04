@@ -243,7 +243,63 @@ class ELUFlow(Flow):
         return ELUFlow(**params)
 
 
+class SigmoidFlow(Flow):
+    def __init__(self, inverse=False):
+        super(SigmoidFlow, self).__init__(inverse)
+
+    @overrides
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        out = input.sigmoid()
+        logdet = F.softplus(input) + F.softplus(-input)
+        logdet = logdet.view(logdet.size(0), -1).sum(dim=1) * -1.
+        return out, logdet
+
+    @overrides
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, *]
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        eps = 1e-12
+        out = torch.log(torch.reciprocal(input + eps) - 1.  + eps) * -1.
+        logdet = torch.log(input + eps) + torch.log((1. - input) + eps)
+        logdet = logdet.view(logdet.size(0), -1).sum(dim=1) * -1.
+        return out, logdet
+
+    @overrides
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            return self.forward(data)
+
+    @overrides
+    def extra_repr(self):
+        return 'inverse={}'.format(self.inverse)
+
+    @classmethod
+    def from_params(cls, params: Dict) -> "SigmoidFlow":
+        return SigmoidFlow(**params)
+
+
 PowshrinkFlow.register('power_shrink')
 LeakyReLUFlow.register('leaky_relu')
 ELUFlow.register('elu')
 IdentityFlow.register('identity')
+SigmoidFlow.register('sigmoid')
