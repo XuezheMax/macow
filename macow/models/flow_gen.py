@@ -121,7 +121,7 @@ class VDeQuantFlowGenModel(FlowGenModel):
     @overrides
     def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, channels, H, W]
-        epsilon = data.new_zeros(data.size())
+        epsilon = torch.randn(data.size(), device=data.device)
         self.dequant_flow.fwdpass(epsilon, data, init=True, init_scale=init_scale)
         return self.flow.bwdpass(data, init=True, init_scale=init_scale)
 
