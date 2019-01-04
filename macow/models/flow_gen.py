@@ -118,7 +118,6 @@ class VDeQuantFlowGenModel(FlowGenModel):
         log_posteriors = log_posteriors.mul(-0.5) - logdet
         return u, log_posteriors.view(x.size(0), nsamples)
 
-    @overrides
     @classmethod
     def from_params(cls, params: Dict) -> "VDeQuantFlowGenModel":
         flow_params = params.pop('flow')
@@ -127,7 +126,6 @@ class VDeQuantFlowGenModel(FlowGenModel):
         dequant_flow = DeQuantFlow.from_params(dequant_params)
         return VDeQuantFlowGenModel(flow, dequant_flow, **params)
 
-    @overrides
     @classmethod
     def load(cls, model_path, device) -> "VDeQuantFlowGenModel":
         params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
