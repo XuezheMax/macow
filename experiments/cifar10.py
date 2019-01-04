@@ -109,8 +109,9 @@ def train(epoch):
         nent_batch = 0
         data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
         for data in data_list:
+            x = preprocess(data, n_bits)
             # [batch, 1]
-            noise, log_probs_posterior = fgen.dequantize(data)
+            noise, log_probs_posterior = fgen.dequantize(x)
             # [batch] -> [1]
             log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
             data = preprocess(data, n_bits, noise).squeeze(1)
@@ -172,8 +173,9 @@ def eval(data_loader, k):
         data = data.to(device, non_blocking=True)
         # [batch, channels, H, W]
         batch, c, h, w = data.size()
+        x = preprocess(data, n_bits)
         # [batch, k]
-        noise, log_probs_posterior = fgen.dequantize(data, nsamples=k)
+        noise, log_probs_posterior = fgen.dequantize(x, nsamples=k)
         # [batch, k, channels, H, W]
         data = preprocess(data, n_bits, noise)
         # [batch * k, channels, H, W] -> [batch * k] -> [batch, k]
@@ -204,7 +206,7 @@ def reconstruct(epoch):
     n = 128
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(img.to(device), n_bits, 0).squeeze(1)
+    img = preprocess(img.to(device), n_bits)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -285,7 +287,7 @@ else:
     init_batch_size = 2048
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
-    init_data = preprocess(init_data.to(device), n_bits, 0.).squeeze(1)
+    init_data = preprocess(init_data.to(device), n_bits)
     fgen.eval()
     fgen.init(init_data, init_scale=1.0)
     # create shadow mae for ema

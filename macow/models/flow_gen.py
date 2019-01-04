@@ -118,6 +118,13 @@ class VDeQuantFlowGenModel(FlowGenModel):
         log_posteriors = log_posteriors.mul(-0.5) - logdet
         return u.view(x.size(0), nsamples, *x.size()[1:]), log_posteriors.view(x.size(0), nsamples)
 
+    @overrides
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        # [batch, channels, H, W]
+        epsilon = data.new_zeros(data.size())
+        self.dequant_flow.fwdpass(epsilon, data, init=True, init_scale=init_scale)
+        return self.flow.bwdpass(data, init=True, init_scale=init_scale)
+
     @classmethod
     def from_params(cls, params: Dict) -> "VDeQuantFlowGenModel":
         flow_params = params.pop('flow')
