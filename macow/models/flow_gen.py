@@ -116,7 +116,7 @@ class VDeQuantFlowGenModel(FlowGenModel):
         # [batch * nsamples]
         log_posteriors = epsilon.mul(epsilon).sum(dim=1) + math.log(math.pi * 2.) * epsilon.size(1)
         log_posteriors = log_posteriors.mul(-0.5) - logdet
-        return u, log_posteriors.view(x.size(0), nsamples)
+        return u.view(x.size(0), nsamples, *x.size()[1:]), log_posteriors.view(x.size(0), nsamples)
 
     @classmethod
     def from_params(cls, params: Dict) -> "VDeQuantFlowGenModel":
