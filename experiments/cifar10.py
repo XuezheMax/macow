@@ -322,7 +322,7 @@ for epoch in range(start_epoch, args.epochs + 1):
         with torch.no_grad():
             nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw = eval(test_loader, test_k)
 
-        if nll_iw < best_nll_iw:
+        if nll_mc < best_nll_mc:
             patient = 0
             torch.save(fgen.state_dict(), model_name)
 
