@@ -10,9 +10,9 @@ from macow.flows.flow import Flow
 from macow.nnet import Conv2dWeightNorm
 
 
-class ResNetBlock(nn.Module):
+class NICEBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dropout=0.0):
-        super(ResNetBlock, self).__init__()
+        super(NICEBlock, self).__init__()
         self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
@@ -57,7 +57,7 @@ class NICE(Flow):
             out_channels = out_channels * 2
         if s_channels is None:
             s_channels = 0
-        self.net = ResNetBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dropout=dropout)
+        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dropout=dropout)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)
