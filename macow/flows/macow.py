@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.flows.actnorm import ActNorm2dFlow
-from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
+from macow.flows.conv import MaskedConvFlow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
 from macow.flows.glow import GlowStep

@@ -4,7 +4,6 @@ from overrides import overrides
 from typing import Tuple, Dict
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from macow.flows.flow import Flow
 from macow.nnet import Conv2dWeightNorm
