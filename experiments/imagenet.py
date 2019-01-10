@@ -27,7 +27,7 @@ parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='in
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
-parser.add_argument('--epochs', type=int, default=50000, metavar='N', help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=5000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')

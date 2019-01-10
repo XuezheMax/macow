@@ -21,6 +21,9 @@ def load_datasets(dataset, data_path=None):
         return load_cifar10()
     elif dataset == 'imagenet':
         return load_imagenet(data_path)
+    elif dataset.startswith('celeba'):
+        image_size = int(dataset[6:])
+        return load_celeba(data_path, image_size)
     else:
         raise ValueError('unknown data set %s' % dataset)
 
@@ -78,13 +81,15 @@ def load_lsun128(data_path, category):
     imageSize = 128
     train_data = datasets.LSUN(data_path, classes=[category + '_train'],
                                transform=transforms.Compose([
-                                   transforms.Resize((imageSize, imageSize)),
+                                   transforms.CenterCrop(256),
+                                   transforms.Resize(imageSize),
                                    transforms.ToTensor(),
                                ]))
 
     val_data = datasets.LSUN(data_path, classes=[category + '_val'],
                              transform=transforms.Compose([
-                                 transforms.Resize((imageSize, imageSize)),
+                                 transforms.CenterCrop(256),
+                                 transforms.Resize(imageSize),
                                  transforms.ToTensor(),
                              ]))
     return train_data, val_data
@@ -116,6 +121,20 @@ def load_imagenet(data_path):
                                       transform=transforms.Compose([
                                           transforms.ToTensor()
                                       ]))
+    return train_data, val_data
+
+
+def load_celeba(data_path, imageSize):
+    train_data = datasets.ImageFolder(os.path.join(data_path, 'train'),
+                                      transform=transforms.Compose([
+                                          transforms.Resize(imageSize),
+                                          transforms.ToTensor()
+                                      ]))
+    val_data = datasets.ImageFolder(os.path.join(data_path, 'val'),
+                                    transform=transforms.Compose([
+                                        transforms.Resize(imageSize),
+                                        transforms.ToTensor()
+                                    ]))
     return train_data, val_data
 
 

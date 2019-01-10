@@ -23,10 +23,9 @@ from macow.utils import exponentialMovingAverage, total_grad_norm
 
 parser = argparse.ArgumentParser(description='MAE Binary Image Example')
 parser.add_argument('--config', type=str, help='config file', required=True)
-parser.add_argument('--category', choices=['bedroom', 'tower', 'church_outdoor'], help='category', required=True)
-parser.add_argument('--batch-size', type=int, default=128, metavar='N', help='input batch size for training (default: 160)')
+parser.add_argument('--batch-size', type=int, default=40, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
-parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
+parser.add_argument('--image-size', type=int, default=256, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=5000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
@@ -54,9 +53,8 @@ device = torch.device('cuda') if args.cuda else torch.device('cpu')
 torch.backends.cudnn.benchmark = True
 
 imageSize = args.image_size
-assert imageSize in [64, 128]
-category = args.category
-dataset = 'lsun' + str(imageSize) + '_' + category
+assert imageSize <= 1024
+dataset = 'celeba' + str(imageSize)
 nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
@@ -80,7 +78,7 @@ np.random.shuffle(train_index)
 test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-test_loader = DataLoader(test_data, batch_size=300, shuffle=False, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=60, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
 
 print(len(train_index))
@@ -207,10 +205,10 @@ def eval(data_loader, k):
 def reconstruct(epoch):
     print('reconstruct')
     fgen.eval()
-    n = 64
+    n = 16
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(img.to(device), n_bits, 0)
+    img = preprocess(img.to(device), n_bits)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -224,18 +222,21 @@ def reconstruct(epoch):
     reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(2)] for i in range(n)])).view(-1)
     comparison = comparison[reorder_index]
     image_file = 'reconstruct{}.png'.format(epoch)
-    save_image(comparison, os.path.join(result_path, image_file), nrow=16)
+    save_image(comparison, os.path.join(result_path, image_file), nrow=4)
 
 
 def sample(epoch):
     print('sampling')
     fgen.eval()
     n = 256
-    z = torch.randn(n, 3, imageSize, imageSize).to(device)
-    img, _ = fgen.decode(z)
-    img = postprocess(img, n_bits)
-    image_file = 'sample{}.png'.format(epoch)
-    save_image(img, os.path.join(result_path, image_file), nrow=16)
+    taus = [0.7, 0.8, 0.9, 1.0]
+    for t in taus:
+        z = torch.randn(n, 3, imageSize, imageSize).to(device)
+        z = z * t
+        img, _ = fgen.decode(z)
+        img = postprocess(img, n_bits)
+        image_file = 'sample{}.t{:.1f}.png'.format(epoch, t)
+        save_image(img, os.path.join(result_path, image_file), nrow=16)
 
 
 print(args)
@@ -289,8 +290,8 @@ else:
         raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
     fgen.eval()
-    init_batch_size = 1024 if imageSize == 64 else 128
-    init_iter = 1 if imageSize == 64 else 4
+    init_batch_size = 2048 if imageSize == 32 else 1024
+    init_iter = 1
     print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
     for _ in range(init_iter):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
