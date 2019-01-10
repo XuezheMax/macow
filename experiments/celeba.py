@@ -290,7 +290,7 @@ else:
         raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
     fgen.eval()
-    init_batch_size = 2048 if imageSize == 32 else 1024
+    init_batch_size = 256
     init_iter = 1
     print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
     for _ in range(init_iter):
