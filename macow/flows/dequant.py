@@ -21,21 +21,27 @@ class DeQuantFlow(Flow):
         self.sigmoid = SigmoidFlow(inverse=False)
         if s_channels > 0:
             layers = list()
-            planes = in_channels
-            out_plane = 24
+            plane_unit = 32
+            if bottom:
+                out_plane = plane_unit
+                layers.append(('resnet_bottom', ResNet(in_channels, [out_plane, out_plane], [1, 1])))
+                levels = levels - 1
+            else:
+                out_plane = 8
+                layers.append(('nin_bottom', Conv2dWeightNorm(in_channels, out_plane, 3, padding=1, bias=True)))
+
+            planes = out_plane
             out_planes = [out_plane]
             for level in range(levels):
-                layers.append(('resnet%d' % level, ResNet(planes, [out_plane, out_plane], [1, 1])))
+                out_plane = min(planes + plane_unit, 128)
+                out_planes.append(out_plane)
+                layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_plane, 3, 2, 1, bias=True)))
+                layers.append(('elu%d' % level, nn.ELU(inplace=True)))
                 planes = out_plane
-                if level < levels - 1:
-                    out_plane = min(planes * 2, 96)
-                    out_planes.append(out_plane)
-                    layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_plane, 3, 2, 1, bias=True)))
-                    layers.append(('elu%d' % level, nn.ELU(inplace=True)))
-                    planes = out_plane
+                layers.append(('resnet%d' % level, ResNet(planes, [out_plane, out_plane], [1, 1])))
 
             planes = out_planes.pop()
-            for level in range(levels - 1):
+            for level in range(levels):
                 layers.append(('up%d' % level, ConvTranspose2dWeightNorm(planes, out_planes[-1], 3, 2, 1, 1, bias=True)))
                 layers.append(('elu%d' % (level + levels), nn.ELU(inplace=True)))
                 planes = out_planes.pop()
