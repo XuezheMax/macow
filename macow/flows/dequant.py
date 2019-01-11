@@ -22,7 +22,7 @@ class DeQuantFlow(Flow):
         if s_channels > 0:
             layers = list()
             planes = in_channels
-            out_planes = [s_channels, 32]
+            out_planes = [s_channels, 24]
             for level in range(levels):
                 out_plane = out_planes[-1]
                 layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_plane, 3, 2, 1, bias=True)))
