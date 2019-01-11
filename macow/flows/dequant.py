@@ -14,10 +14,10 @@ from macow.nnet.weight_norm import Conv2dWeightNorm, ConvTranspose2dWeightNorm
 
 
 class DeQuantFlow(Flow):
-    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=512, s_channels=0, scale=True, dropout=0.0):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=512, s_channels=0, scale=True, dropout=0.0, bottom=True):
         super(DeQuantFlow, self).__init__(False)
         self.macow = MaCow(levels, num_steps, in_channels, kernel_size, factors,
-                           hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, dropout=dropout, inverse=False, bottom=True)
+                           hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, dropout=dropout, inverse=False, bottom=bottom)
         self.sigmoid = SigmoidFlow(inverse=False)
         if s_channels > 0:
             layers = list()
