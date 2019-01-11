@@ -284,7 +284,7 @@ else:
     else:
         raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
-    init_batch_size = 1024
+    init_batch_size = 2048
     init_index = np.random.choice(train_index, init_batch_size, replace=False)
     init_data, _ = get_batch(train_data, init_index)
     init_data = preprocess(init_data.to(device), n_bits)
