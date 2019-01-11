@@ -288,8 +288,6 @@ else:
         fgen = VDeQuantFlowGenModel.from_params(params).to(device)
     else:
         raise ValueError('unknown dequantization method: %s' % dequant)
-
-    print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
     # initialize
     fgen.eval()
     init_batch_size = 256
