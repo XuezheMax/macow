@@ -14,7 +14,7 @@
   },
   "dequant": {
     "levels": 3,
-    "num_steps": [2, [4], 4],
+    "num_steps": [1, [4], 4],
     "factors": [2],
     "in_channels": 3,
     "kernel_size": 3,
