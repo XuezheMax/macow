@@ -25,10 +25,11 @@ class DeQuantFlow(Flow):
             planes = 32
             out_planes = [planes]
             for level in range(1, levels):
-                layers.append(('down%d' % level, Conv2dWeightNorm(planes, planes * 2, 3, 2, 1, bias=True)))
+                out_plane = min(planes * 2, 96)
+                out_planes.append(out_plane)
+                layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_planes, 3, 2, 1, bias=True)))
                 layers.append(('elu%d' % level, nn.ELU(inplace=True)))
-                planes = min(planes * 2, 96)
-                out_planes.append(planes)
+                planes = out_plane
                 layers.append(('resnet%d' % level, ResNet(planes, [planes, planes], [1, 1])))
 
             planes = out_planes.pop()
