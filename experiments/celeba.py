@@ -249,8 +249,6 @@ warmups = args.warmup_epochs
 step_decay = 0.999998
 grad_clip = args.grad_clip
 dequant = args.dequant
-# number of parameters
-print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
@@ -290,6 +288,8 @@ else:
         fgen = VDeQuantFlowGenModel.from_params(params).to(device)
     else:
         raise ValueError('unknown dequantization method: %s' % dequant)
+
+    print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
     # initialize
     fgen.eval()
     init_batch_size = 256
@@ -320,6 +320,8 @@ else:
     best_nent = 1e12
     best_nepd = 1e12
 
+# number of parameters
+print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 for epoch in range(start_epoch, args.epochs + 1):
