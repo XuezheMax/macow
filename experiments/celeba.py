@@ -59,7 +59,7 @@ nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
 n_bins = 2. ** n_bits
-test_k = 5
+test_k = 4
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
@@ -78,7 +78,7 @@ np.random.shuffle(train_index)
 test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-test_loader = DataLoader(test_data, batch_size=60, shuffle=False, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=30, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
 
 print(len(train_index))
