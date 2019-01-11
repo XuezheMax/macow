@@ -21,25 +21,25 @@ class DeQuantFlow(Flow):
         self.sigmoid = SigmoidFlow(inverse=False)
         if s_channels > 0:
             layers = list()
-            layers.append(('resnet0', ResNet(in_channels, [32, 32], [1, 1])))
-            planes = 32
-            out_planes = [planes]
-            for level in range(1, levels):
-                out_plane = min(planes * 2, 96)
-                out_planes.append(out_plane)
+            planes = in_channels
+            out_planes = [s_channels, 32]
+            for level in range(levels):
+                out_plane = out_planes[-1]
                 layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_plane, 3, 2, 1, bias=True)))
                 layers.append(('elu%d' % level, nn.ELU(inplace=True)))
+                layers.append(('resnet%d' % level, ResNet(out_plane, [out_plane, out_plane], [1, 1])))
                 planes = out_plane
-                layers.append(('resnet%d' % level, ResNet(planes, [planes, planes], [1, 1])))
+                out_planes.append(min(planes * 2, 96))
 
+            out_planes.pop()
             planes = out_planes.pop()
-            for level in range(1, levels):
+            for level in range(levels):
                 layers.append(('up%d' % level, ConvTranspose2dWeightNorm(planes, out_planes[-1], 3, 2, 1, 1, bias=True)))
-                layers.append(('elu%d' % (level + levels - 1), nn.ELU(inplace=True)))
+                layers.append(('elu%d' % (level + levels), nn.ELU(inplace=True)))
                 planes = out_planes.pop()
 
-            layers.append(('s_level', Conv2dWeightNorm(planes, s_channels, 1, bias=True)))
             assert len(out_planes) == 0
+            layers.append(('s_level', Conv2dWeightNorm(planes, s_channels, 1, bias=True)))
             self.encoder = nn.Sequential(OrderedDict(layers))
         else:
             self.encoder = None
