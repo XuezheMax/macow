@@ -22,17 +22,18 @@ class DeQuantFlow(Flow):
         if s_channels > 0:
             layers = list()
             planes = in_channels
-            out_planes = [24]
+            out_plane = 24
+            out_planes = [out_plane]
             for level in range(levels):
-                out_plane = out_planes[-1]
                 layers.append(('resnet%d' % level, ResNet(planes, [out_plane, out_plane], [1, 1])))
                 planes = out_plane
-                out_planes.append(min(planes * 2, 96))
                 if level < levels - 1:
-                    layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_planes[-1], 3, 2, 1, bias=True)))
+                    out_plane = min(planes * 2, 96)
+                    out_planes.append(out_plane)
+                    layers.append(('down%d' % level, Conv2dWeightNorm(planes, out_plane, 3, 2, 1, bias=True)))
                     layers.append(('elu%d' % level, nn.ELU(inplace=True)))
+                    planes = out_plane
 
-            out_planes.pop()
             planes = out_planes.pop()
             for level in range(levels - 1):
                 layers.append(('up%d' % level, ConvTranspose2dWeightNorm(planes, out_planes[-1], 3, 2, 1, 1, bias=True)))
