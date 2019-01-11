@@ -13,15 +13,15 @@
     "inverse": true
   },
   "dequant": {
-    "levels": 2,
-    "num_steps": [[4], 4],
+    "levels": 3,
+    "num_steps": [2, [4], 4],
     "factors": [2],
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
     "hidden_channels": 256,
     "s_channels": 4,
-    "bottom": false,
+    "bottom": true,
     "dropout": 0.0
   },
   "ngpu": 2
