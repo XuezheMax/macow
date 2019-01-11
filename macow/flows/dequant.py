@@ -23,17 +23,22 @@ class DeQuantFlow(Flow):
             layers = list()
             layers.append(('resnet0', ResNet(in_channels, [32, 32], [1, 1])))
             planes = 32
+            out_planes = [planes]
             for level in range(1, levels):
                 layers.append(('down%d' % level, Conv2dWeightNorm(planes, planes * 2, 3, 2, 1, bias=True)))
                 layers.append(('elu%d' % level, nn.ELU(inplace=True)))
-                planes = planes * 2
+                planes = min(planes * 2, 96)
+                out_planes.append(planes)
                 layers.append(('resnet%d' % level, ResNet(planes, [planes, planes], [1, 1])))
+
+            planes = out_planes.pop()
             for level in range(1, levels):
-                layers.append(('up%d' % level, ConvTranspose2dWeightNorm(planes, planes // 2, 3, 2, 1, 1, bias=True)))
+                layers.append(('up%d' % level, ConvTranspose2dWeightNorm(planes, out_planes[-1], 3, 2, 1, 1, bias=True)))
                 layers.append(('elu%d' % (level + levels - 1), nn.ELU(inplace=True)))
-                planes = planes // 2
+                planes = out_planes.pop()
 
             layers.append(('s_level', Conv2dWeightNorm(planes, s_channels, 1, bias=True)))
+            assert len(out_planes) == 0
             self.encoder = nn.Sequential(OrderedDict(layers))
         else:
             self.encoder = None
