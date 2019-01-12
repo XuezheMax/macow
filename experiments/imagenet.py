@@ -253,7 +253,7 @@ if args.recover:
     if dequant == 'uniform':
         fgen = FlowGenModel.from_params(params).to(device)
     elif dequant == 'variational':
-        fgen = VDeQuantFlowGenModel.from_params(params).to(device)
+        fgen = VDeQuantFlowGenModel.from_params(params).to_device(device)
     else:
         raise ValueError('unknown dequantization method: %s' % dequant)
 
@@ -301,6 +301,7 @@ else:
     # fgen_shadow = FlowGenModel.from_params(params).to(device)
     # exponentialMovingAverage(fgen, fgen_shadow, polyak_decay, init=True)
 
+    fgen.to_device(device)
     optimizer = get_optimizer(lr, fgen.parameters())
     lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)

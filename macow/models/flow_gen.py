@@ -26,6 +26,9 @@ class FlowGenModel(nn.Module):
         if ngpu > 1:
             self.flow = DataParallelFlow(self.flow, device_ids=list(range(ngpu)))
 
+    def to_device(self, device):
+        return self.to(device)
+
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, nsamples, channels, H, W]
         return x.new_empty(x.size(0), nsamples, *x.size()[1:]).uniform_(), x.new_zeros(x.size(0), nsamples)
@@ -103,8 +106,19 @@ class VDeQuantFlowGenModel(FlowGenModel):
         super(VDeQuantFlowGenModel, self).__init__(flow, ngpu)
         assert not dequant_flow.inverse, 'dequantization flow should NOT have inverse mode'
         self.dequant_flow = dequant_flow
+        self.dequant_device = None
         if ngpu > 1:
-            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(range(ngpu)))
+            self.dequant_device = torch.device('cuda:{}'.format(ngpu - 1))
+            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(reversed(range(ngpu))), output_device=0)
+
+    @overrides
+    def to_device(self, device):
+        if self.dequant_device is None:
+            return self.to(device)
+        else:
+            self.flow = self.flow.to(device)
+            self.dequant_flow.to(self.dequant_device)
+            return self
 
     @overrides
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
