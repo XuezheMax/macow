@@ -228,7 +228,7 @@ def reconstruct(epoch):
 def sample(epoch):
     print('sampling')
     fgen.eval()
-    n = 256
+    n = 64
     taus = [0.7, 0.8, 0.9, 1.0]
     for t in taus:
         z = torch.randn(n, 3, imageSize, imageSize).to(device)
@@ -236,7 +236,7 @@ def sample(epoch):
         img, _ = fgen.decode(z)
         img = postprocess(img, n_bits)
         image_file = 'sample{}.t{:.1f}.png'.format(epoch, t)
-        save_image(img, os.path.join(result_path, image_file), nrow=16)
+        save_image(img, os.path.join(result_path, image_file), nrow=8)
 
 
 print(args)
