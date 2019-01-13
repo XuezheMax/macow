@@ -248,7 +248,7 @@ dequant = args.dequant
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
     if dequant == 'uniform':
-        fgen = FlowGenModel.from_params(params).to(device)
+        fgen = FlowGenModel.from_params(params).to_device(device)
     elif dequant == 'variational':
         fgen = VDeQuantFlowGenModel.from_params(params).to_device(device)
     else:

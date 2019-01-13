@@ -17,17 +17,25 @@ class FlowGenModel(nn.Module):
     """
     Flow-based Generative model
     """
-    def __init__(self, flow: Flow, ngpu=1):
+    def __init__(self, flow: Flow, ngpu=1, gpu_id=0):
         super(FlowGenModel, self).__init__()
         assert flow.inverse, 'flow based generative should have inverse mode'
         self.flow = flow
         assert ngpu > 0, 'the number of GPUs should be positive.'
         self.ngpu = ngpu
+        self.device = None
         if ngpu > 1:
-            self.flow = DataParallelFlow(self.flow, device_ids=list(range(ngpu)))
+            device_ids = list(range(ngpu))
+            device_ids[gpu_id] = 0
+            device_ids[0] = gpu_id
+            self.device = torch.device('cuda:{}'.format(gpu_id))
+            self.flow = DataParallelFlow(self.flow, device_ids=device_ids, output_device=0)
 
     def to_device(self, device):
-        return self.to(device)
+        if self.device is None:
+            return self.to(device)
+        else:
+            return self.to(self.device)
 
     def dequantize(self, x, nsamples=1) -> Tuple[torch.Tensor, torch.Tensor]:
         # [batch, nsamples, channels, H, W]
@@ -102,22 +110,27 @@ class FlowGenModel(nn.Module):
 
 
 class VDeQuantFlowGenModel(FlowGenModel):
-    def __init__(self, flow: Flow, dequant_flow: Flow, ngpu=1):
-        super(VDeQuantFlowGenModel, self).__init__(flow, ngpu)
+    def __init__(self, flow: Flow, dequant_flow: Flow, ngpu=1, gpu_ids=(0, 0)):
+        flow_gpu_id, dequant_gpu_id = gpu_ids
+        super(VDeQuantFlowGenModel, self).__init__(flow, ngpu, flow_gpu_id)
         assert not dequant_flow.inverse, 'dequantization flow should NOT have inverse mode'
         self.dequant_flow = dequant_flow
         self.dequant_device = None
         if ngpu > 1:
-            self.dequant_device = torch.device('cuda:{}'.format(ngpu - 1))
-            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(reversed(range(ngpu))), output_device=0)
+            device_ids = list(range(ngpu))
+            device_ids[dequant_gpu_id] = 0
+            device_ids[0] = dequant_gpu_id
+            self.dequant_device = torch.device('cuda:{}'.format(dequant_gpu_id))
+            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(range(ngpu)), output_device=0)
 
     @overrides
     def to_device(self, device):
-        if self.dequant_device is None:
+        if self.device is None:
+            assert self.dequant_device is None
             return self.to(device)
         else:
-            self.flow = self.flow.to(device)
-            self.dequant_flow.to(self.dequant_device)
+            self.flow = self.flow.to(self.device)
+            self.dequant_flow = self.dequant_flow.to(self.dequant_device)
             return self
 
     @overrides
