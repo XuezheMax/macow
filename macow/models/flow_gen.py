@@ -121,7 +121,7 @@ class VDeQuantFlowGenModel(FlowGenModel):
             device_ids[dequant_gpu_id] = 0
             device_ids[0] = dequant_gpu_id
             self.dequant_device = torch.device('cuda:{}'.format(dequant_gpu_id))
-            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=list(range(ngpu)), output_device=0)
+            self.dequant_flow = DataParallelFlow(self.dequant_flow, device_ids=device_ids, output_device=0)
 
     @overrides
     def to_device(self, device):
