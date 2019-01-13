@@ -78,7 +78,7 @@ np.random.shuffle(train_index)
 test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-test_loader = DataLoader(test_data, batch_size=30, shuffle=False, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=25, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
 
 print(len(train_index))
