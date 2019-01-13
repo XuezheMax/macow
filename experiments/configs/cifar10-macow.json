@@ -6,7 +6,6 @@
     "factors": [4, 4],
     "in_channels": 3,
     "kernel_size": 3,
-    "dilations": [1, 2, 2, 1],
     "scale": true,
     "hidden_channels": 512,
     "bottom": true,
