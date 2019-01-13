@@ -67,12 +67,12 @@ class MaCowStep(Flow):
     """
     A step of Macow Flows with 4 Macow Unit and a Glow step
     """
-    def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, dilation, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
         num_units = 4
         units = [MaCowUnit(in_channels, kernel_size, s_channels, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
-        self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dropout=dropout)
+        self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dilation=dilation, dropout=dropout)
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -109,9 +109,9 @@ class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (no squeeze nor split)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, s_channels, inverse=False):
+    def __init__(self, num_steps, in_channels, kernel_size, s_channels, dilation, inverse=False):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, scale=True, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, dilation, scale=True, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -148,10 +148,10 @@ class MaCowTopBlock(Flow):
     """
     Masked Convolutional Flow Block (squeeze at beginning)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, s_channels, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, num_steps, in_channels, kernel_size, s_channels, dilation, scale=True, inverse=False, dropout=0.0):
         super(MaCowTopBlock, self).__init__(inverse)
         hidden_channels = 512
-        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, dilation, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -188,7 +188,7 @@ class MaCowInternalBlock(Flow):
     """
     Masked Convolution Flow Internal Block (squeeze at beginning and split at end)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels, factor=2, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels, dilation, factor=2, scale=True, inverse=False, dropout=0.0):
         super(MaCowInternalBlock, self).__init__(inverse)
         num_layers = len(num_steps)
         assert num_layers < factor
@@ -196,7 +196,7 @@ class MaCowInternalBlock(Flow):
         self.priors = nn.ModuleList()
         channel_step = in_channels // factor
         for num_step in num_steps:
-            layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_step)]
+            layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, dilation, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_step)]
             self.layers.append(nn.ModuleList(layer))
             prior = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=True, inverse=inverse, factor=factor)
             self.priors.append(prior)
@@ -277,28 +277,32 @@ class MaCow(Flow):
     """
     Masked Convolutional Flow
     """
-    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=512, s_channels=0, scale=True, inverse=False, dropout=0.0, bottom=True):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=512, s_channels=0, dilations=None, scale=True, inverse=False, dropout=0.0, bottom=True):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)
         factors = [0] + factors + [0] if bottom else factors + [0]
         assert levels == len(factors)
+        if dilations is None:
+            dilations = [1] * levels
         blocks = []
         self.levels = levels
         self.internals = levels - 2 if bottom else levels - 1
         for level in range(levels):
+            dilation = dilations[level]
             if level == 0 and bottom:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels, inverse=inverse)
+                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels, dilation, inverse=inverse)
                 blocks.append(macow_block)
             elif level == levels - 1:
                 in_channels = in_channels * 4
                 s_channels = s_channels * 4
-                macow_block = MaCowTopBlock(num_steps[level], in_channels, kernel_size, s_channels, scale=scale, inverse=inverse, dropout=dropout)
+                macow_block = MaCowTopBlock(num_steps[level], in_channels, kernel_size, s_channels, dilation, scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
                 s_channels = s_channels * 4
-                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, s_channels, factor=factors[level], scale=scale, inverse=inverse, dropout=dropout)
+                macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, hidden_channels, s_channels, dilation,
+                                                 factor=factors[level], scale=scale, inverse=inverse, dropout=dropout)
                 blocks.append(macow_block)
                 in_channels = macow_block.z1_channels
         self.blocks = nn.ModuleList(blocks)

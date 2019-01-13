@@ -10,11 +10,11 @@ from macow.nnet import Conv2dWeightNorm
 
 
 class NICEBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dropout=0.0):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dilation, dropout=0.0):
         super(NICEBlock, self).__init__()
-        self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, padding=1, bias=True)
+        self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
-        self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, padding=1, bias=True)
+        self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.dropout = nn.Dropout(dropout)
 
@@ -43,7 +43,7 @@ class NICEBlock(nn.Module):
 
 
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dropout=0.0, factor=2):
+    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dilation=1, dropout=0.0, factor=2):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
@@ -56,7 +56,7 @@ class NICE(Flow):
             out_channels = out_channels * 2
         if s_channels is None:
             s_channels = 0
-        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dropout=dropout)
+        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation, dropout=dropout)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)
