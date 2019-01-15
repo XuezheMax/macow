@@ -162,6 +162,10 @@ class Conv1x1WeightNormFlow(Flow):
         return Conv1x1WeightNormFlow(**params)
 
 
+def gate(x1, x2):
+    return x1 * x2.sigmoid_()
+
+
 class MaskedConvFlow(Flow):
     """
     Masked Convolutional Flow
@@ -174,7 +178,7 @@ class MaskedConvFlow(Flow):
         self.scale = scale
         if hidden_channels is None:
             hidden_channels = min(4 * in_channels, 512)
-        out_channels = in_channels
+        out_channels = in_channels * 2
         if scale:
             out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
@@ -189,16 +193,19 @@ class MaskedConvFlow(Flow):
         else:
             self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net[0].padding)
 
-    def calc_mu_and_scale(self, input: torch.Tensor, s=None):
-        c = self.net[0](input)
+    def calc_mu_and_scale(self, x: torch.Tensor, s=None):
+        c = self.net[0](x)
         if s is not None:
             c = c + s
-        mu = self.net[2](self.net[1](c))
+        c = self.net[2](self.net[1](c))
         scale = None
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
+            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
+            log_scale = gate(log_scale1, log_scale2) + x
             scale = log_scale.add_(2.).sigmoid_()
-            # scale = log_scale.tanh_() + 1.0
+        else:
+            mu1, mu2 = c.chunk(2, dim=1)
+        mu = gate(mu1, mu2) + x
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
@@ -206,12 +213,15 @@ class MaskedConvFlow(Flow):
         if s is not None:
             out = out + s
         out = self.net[1](out)
-        mu = self.net[2].init(out, init_scale=0.0)
+        c = self.net[2].init(out, init_scale=0.0)
         scale = None
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
+            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
+            log_scale = gate(log_scale1, log_scale2) + x
             scale = log_scale.add_(2.).sigmoid_()
-            # scale = log_scale.tanh_().add_(1.0)
+        else:
+            mu1, mu2 = c.chunk(2, dim=1)
+        mu = gate(mu1, mu2) + x
         return mu, scale
 
     @overrides
