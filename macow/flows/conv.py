@@ -177,7 +177,7 @@ class MaskedConvFlow(Flow):
         self.in_channels = in_channels
         self.scale = scale
         if hidden_channels is None:
-            hidden_channels = min(4 * in_channels, 512)
+            hidden_channels = min(2 * in_channels, 512)
         out_channels = in_channels * 2
         if scale:
             out_channels = out_channels * 2
@@ -186,7 +186,8 @@ class MaskedConvFlow(Flow):
         self.net = nn.ModuleList([
             MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order),
             nn.ELU(inplace=True),
-            Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+            Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True),
+            Conv2dWeightNorm(in_channels, in_channels, kernel_size=1, bias=True)
         ])
         if s_channels is None or s_channels <= 0:
             self.s_conv = None
@@ -198,14 +199,15 @@ class MaskedConvFlow(Flow):
         if s is not None:
             c = c + s
         c = self.net[2](self.net[1](c))
+        residual = self.net[3](x)
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            log_scale = gate(log_scale1, log_scale2) + residual
             scale = log_scale.add_(2.).sigmoid_()
         else:
             mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
+        mu = gate(mu1, mu2) + residual
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
@@ -214,14 +216,15 @@ class MaskedConvFlow(Flow):
             out = out + s
         out = self.net[1](out)
         c = self.net[2].init(out, init_scale=0.1 * init_scale)
+        residual = self.net[3].init(x, init_scale=0.0)
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            log_scale = gate(log_scale1, log_scale2) + residual
             scale = log_scale.add_(2.).sigmoid_()
         else:
             mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
+        mu = gate(mu1, mu2) + residual
         return mu, scale
 
     @overrides

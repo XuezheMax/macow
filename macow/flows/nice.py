@@ -51,6 +51,8 @@ class NICE(Flow):
             hidden_channels = min(8 * in_channels, 512)
         out_channels = in_channels // factor
         in_channels = in_channels - out_channels
+
+        self.residual = Conv2dWeightNorm(in_channels, out_channels, kernel_size=1, bias=True)
         self.z1_channels = in_channels
         if scale:
             out_channels = out_channels * 2
@@ -60,18 +62,24 @@ class NICE(Flow):
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)
+        res = self.residual(z1)
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
+            log_scale = log_scale + res
             scale = log_scale.add_(2.).sigmoid_()
+        mu = mu + res
         return mu, scale
 
     def init_net(self, z1: torch.Tensor, s=None, init_scale=1.0):
         mu = self.net.init(z1, s=s, init_scale=init_scale)
+        res = self.residual.init(z1, init_scale=0.0)
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
+            log_scale = log_scale + res
             scale = log_scale.add_(2.).sigmoid_()
+        mu = mu + res
         return mu, scale
 
     @overrides
