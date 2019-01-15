@@ -201,11 +201,11 @@ class MaskedConvFlow(Flow):
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2) + x
+            log_scale = gate(log_scale1, log_scale2)
             scale = log_scale.add_(2.).sigmoid_()
         else:
             mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2) + x
+        mu = gate(mu1, mu2)
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
@@ -217,11 +217,11 @@ class MaskedConvFlow(Flow):
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2) + x
+            log_scale = gate(log_scale1, log_scale2)
             scale = log_scale.add_(2.).sigmoid_()
         else:
             mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2) + x
+        mu = gate(mu1, mu2)
         return mu, scale
 
     @overrides
