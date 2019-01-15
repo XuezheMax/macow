@@ -213,7 +213,7 @@ class MaskedConvFlow(Flow):
         if s is not None:
             out = out + s
         out = self.net[1](out)
-        c = self.net[2].init(out, init_scale=0.0)
+        c = self.net[2].init(out, init_scale=0.1 * init_scale)
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
