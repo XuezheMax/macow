@@ -166,6 +166,31 @@ def gate(x1, x2):
     return x1 * x2.sigmoid_()
 
 
+class GatedResNetBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, hidden_channels, order):
+        super(GatedResNetBlock, self).__init__()
+        self.masked_conv = MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order)
+        self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+        self.activation = nn.ELU(inplace=True)
+        self.residual = Conv2dWeightNorm(in_channels, in_channels, kernel_size=1, bias=True)
+
+    def forward(self, x, s=None):
+        residual = self.residual(x)
+        c = self.masked_conv(x)
+        if s is not None:
+            c = c + s
+        c = self.conv1x1(self.activation(c))
+        return c, residual
+
+    def init(self, x, s=None, init_scale=1.0):
+        residual = self.residual.init(x, init_scale=0.0)
+        c = self.masked_conv.init(x, init_scale=init_scale)
+        if s is not None:
+            c = c + s
+        c = self.conv1x1.init(self.activation(c), init_scale=0.1 * init_scale)
+        return c, residual
+
+
 class MaskedConvFlow(Flow):
     """
     Masked Convolutional Flow
@@ -183,23 +208,14 @@ class MaskedConvFlow(Flow):
             out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
         self.order = order
-        self.net = nn.ModuleList([
-            MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order),
-            nn.ELU(inplace=True),
-            Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True),
-            Conv2dWeightNorm(in_channels, in_channels, kernel_size=1, bias=True)
-        ])
+        self.net = GatedResNetBlock(in_channels, out_channels, kernel_size, hidden_channels, order)
         if s_channels is None or s_channels <= 0:
             self.s_conv = None
         else:
             self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net[0].padding)
 
     def calc_mu_and_scale(self, x: torch.Tensor, s=None):
-        c = self.net[0](x)
-        if s is not None:
-            c = c + s
-        c = self.net[2](self.net[1](c))
-        residual = self.net[3](x)
+        c, residual = self.net(x, s=s)
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
@@ -211,12 +227,7 @@ class MaskedConvFlow(Flow):
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
-        out = self.net[0].init(x, init_scale=init_scale)
-        if s is not None:
-            out = out + s
-        out = self.net[1](out)
-        c = self.net[2].init(out, init_scale=0.1 * init_scale)
-        residual = self.net[3].init(x, init_scale=0.0)
+        c, residual = self.net.init(x, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
             mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
