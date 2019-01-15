@@ -176,7 +176,7 @@ class GatedResNetBlock(nn.Module):
 
     def forward(self, x, s=None):
         residual = self.residual(x)
-        c = self.masked_conv(self.activation(x))
+        c = self.masked_conv(x)
         if s is not None:
             c = c + s
         c = self.conv1x1(self.activation(c))
@@ -184,10 +184,10 @@ class GatedResNetBlock(nn.Module):
 
     def init(self, x, s=None, init_scale=1.0):
         residual = self.residual.init(x, init_scale=0.0)
-        c = self.masked_conv.init(self.activation(x), init_scale=init_scale)
+        c = self.masked_conv.init(x, init_scale=init_scale)
         if s is not None:
             c = c + s
-        c = self.conv1x1.init(self.activation(c), init_scale=0.1 * init_scale)
+        c = self.conv1x1.init(self.activation(c), init_scale=0.0 * init_scale)
         return c, residual
 
 
