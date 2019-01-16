@@ -109,9 +109,9 @@ class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (no squeeze nor split)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, s_channels, dilation, inverse=False):
+    def __init__(self, num_steps, in_channels, kernel_size, s_channels, dilation, scale=False, inverse=False):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, dilation, scale=False, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, dilation, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -291,7 +291,7 @@ class MaCow(Flow):
         for level in range(levels):
             dilation = dilations[level]
             if level == 0 and bottom:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels, dilation, inverse=inverse)
+                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels, dilation, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
             elif level == levels - 1:
                 in_channels = in_channels * 4
