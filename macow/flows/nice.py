@@ -7,16 +7,16 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.nnet import Conv2dWeightNorm
+from macow.flows.conv import gate
 
 
 class NICEBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dilation, dropout=0.0):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dilation):
         super(NICEBlock, self).__init__()
         self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
         self.activation = nn.ELU(inplace=True)
-        self.dropout = nn.Dropout(dropout)
 
     def init(self, x, s=None, init_scale=1.0):
         if s is not None:
@@ -26,7 +26,7 @@ class NICEBlock(nn.Module):
 
         out = self.activation(self.conv2.init(out, init_scale=init_scale))
 
-        out = self.conv3.init(self.dropout(out), init_scale=0.0)
+        out = self.conv3.init(out, init_scale=0.0)
 
         return out
 
@@ -38,7 +38,7 @@ class NICEBlock(nn.Module):
 
         out = self.activation(self.conv2(out))
 
-        out = self.conv3(self.dropout(out))
+        out = self.conv3(out)
         return out
 
 
@@ -56,22 +56,30 @@ class NICE(Flow):
             out_channels = out_channels * 2
         if s_channels is None:
             s_channels = 0
-        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation, dropout=dropout)
+        self.net = NICEBlock(in_channels, out_channels * 2, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
-        mu = self.net(z1, s=s)
+        c = self.net(z1, s=s)
         scale = None
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
+            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
+            log_scale = gate(log_scale1, log_scale2)
             scale = log_scale.add_(2.).sigmoid_()
+        else:
+            mu1, mu2 = c.chunk(2, dim=1)
+        mu = gate(mu1, mu2)
         return mu, scale
 
     def init_net(self, z1: torch.Tensor, s=None, init_scale=1.0):
-        mu = self.net.init(z1, s=s, init_scale=init_scale)
+        c = self.net.init(z1, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
-            mu, log_scale = mu.chunk(2, dim=1)
+            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
+            log_scale = gate(log_scale1, log_scale2)
             scale = log_scale.add_(2.).sigmoid_()
+        else:
+            mu1, mu2 = c.chunk(2, dim=1)
+        mu = gate(mu1, mu2)
         return mu, scale
 
     @overrides
