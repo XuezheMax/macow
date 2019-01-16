@@ -63,7 +63,6 @@ class NICE(Flow):
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            log_scale = log_scale
             scale = log_scale.add_(2.).sigmoid_()
         return mu, scale
 
@@ -72,7 +71,6 @@ class NICE(Flow):
         scale = None
         if self.scale:
             mu, log_scale = mu.chunk(2, dim=1)
-            log_scale = log_scale
             scale = log_scale.add_(2.).sigmoid_()
         return mu, scale
 
