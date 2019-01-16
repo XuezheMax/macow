@@ -172,23 +172,20 @@ class GatedResNetBlock(nn.Module):
         self.masked_conv = MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order)
         self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
-        # self.residual = Conv2dWeightNorm(in_channels, in_channels, kernel_size=1, bias=True)
 
     def forward(self, x, s=None):
-        # residual = self.residual(x)
         c = self.masked_conv(x)
         if s is not None:
             c = c + s
         c = self.conv1x1(self.activation(c))
-        return c#, residual
+        return c
 
     def init(self, x, s=None, init_scale=1.0):
-        # residual = self.residual.init(x, init_scale=0.0)
         c = self.masked_conv.init(x, init_scale=init_scale)
         if s is not None:
             c = c + s
-        c = self.conv1x1.init(self.activation(c), init_scale=0.0 * init_scale)
-        return c#, residual
+        c = self.conv1x1.init(self.activation(c), init_scale=0.0)
+        return c
 
 
 class MaskedConvFlow(Flow):
