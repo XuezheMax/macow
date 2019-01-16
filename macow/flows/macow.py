@@ -69,7 +69,7 @@ class MaCowStep(Flow):
     """
     def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, dilation, scale=True, inverse=False, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
-        num_units = 4
+        num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, s_channels, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
         self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dilation=dilation, dropout=dropout)
