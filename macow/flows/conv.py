@@ -163,7 +163,7 @@ class Conv1x1WeightNormFlow(Flow):
 
 
 def gate(x1, x2):
-    return x1.mul_(x2.sigmoid_())
+    return x1 * x2.sigmoid_()
 
 
 class GatedResNetBlock(nn.Module):
