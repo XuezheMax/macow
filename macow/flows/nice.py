@@ -43,7 +43,7 @@ class NICEBlock(nn.Module):
 
 
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dilation=1, dropout=0.0, factor=2):
+    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dilation=1, factor=2):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale

@@ -16,11 +16,11 @@ class GlowStep(Flow):
     """
     A step of Glow. A Conv1x1 followed with a NICE
     """
-    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, dilation=1, dropout=0.0):
+    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, dilation=1):
         super(GlowStep, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dilation=dilation, dropout=dropout)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dilation=dilation)
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -59,9 +59,9 @@ class GlowTopBlock(Flow):
     """
     Glow Block (squeeze at beginning)
     """
-    def __init__(self, num_steps, in_channels, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, num_steps, in_channels, scale=True, inverse=False):
         super(GlowTopBlock, self).__init__(inverse)
-        steps = [GlowStep(in_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [GlowStep(in_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -98,9 +98,9 @@ class GlowInternalBlock(Flow):
     """
     Glow Internal Block (squeeze at beginning and split at end)
     """
-    def __init__(self, num_steps, in_channels, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, num_steps, in_channels, scale=True, inverse=False):
         super(GlowInternalBlock, self).__init__(inverse)
-        steps = [GlowStep(in_channels, scale=scale, inverse=inverse, dropout=dropout) for _ in range(num_steps)]
+        steps = [GlowStep(in_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
         self.prior = NICE(in_channels, scale=True, inverse=inverse)
 
@@ -142,7 +142,7 @@ class Glow(Flow):
     """
     Glow
     """
-    def __init__(self, levels, num_steps, in_channels, scale=True, inverse=False, dropout=0.0):
+    def __init__(self, levels, num_steps, in_channels, scale=True, inverse=False):
         super(Glow, self).__init__(inverse)
         assert levels > 1, 'Glow should have at least 2 levels.'
         assert levels == len(num_steps)
@@ -151,11 +151,11 @@ class Glow(Flow):
         for level in range(levels):
             if level == levels - 1:
                 in_channels = in_channels * 4
-                macow_block = GlowTopBlock(num_steps[level], in_channels, scale=scale, inverse=inverse, dropout=dropout)
+                macow_block = GlowTopBlock(num_steps[level], in_channels, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
             else:
                 in_channels = in_channels * 4
-                macow_block = GlowInternalBlock(num_steps[level], in_channels, scale=scale, inverse=inverse, dropout=dropout)
+                macow_block = GlowInternalBlock(num_steps[level], in_channels, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
                 in_channels = in_channels // 2
         self.blocks = nn.ModuleList(blocks)
