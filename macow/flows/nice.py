@@ -56,30 +56,22 @@ class NICE(Flow):
             out_channels = out_channels * 2
         if s_channels is None:
             s_channels = 0
-        self.net = NICEBlock(in_channels, out_channels * 2, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation)
+        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
-        c = self.net(z1, s=s)
+        mu = self.net(z1, s=s)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     def init_net(self, z1: torch.Tensor, s=None, init_scale=1.0):
-        c = self.net.init(z1, s=s, init_scale=init_scale)
+        mu = self.net.init(z1, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     @overrides
