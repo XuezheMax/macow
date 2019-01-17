@@ -199,7 +199,10 @@ class MaskedConvFlow(Flow):
         self.in_channels = in_channels
         self.scale = scale
         if hidden_channels is None:
-            hidden_channels = min(2 * in_channels, 512)
+            if in_channels < 64:
+                hidden_channels = 4 * in_channels
+            else:
+                hidden_channels = min(2 * in_channels, 512)
         out_channels = in_channels * 2
         if scale:
             out_channels = out_channels * 2
