@@ -312,23 +312,6 @@ class MaskedConvFlow(Flow):
             out[:, :, i_list, j_list] = new_out
             s_widths = s_widths + 1
 
-        # for i in range(H):
-        #     si = i
-        #     ti = i + cH + 1
-        #     for j in range(W):
-        #         sj = j
-        #         tj = j + 2 * cW + 1
-        #         out_curr = out[:, :, si:ti, sj:tj]
-        #         s_curr = s if s is None else s[:, :, si:ti, sj:tj]
-        #         # [batch, channels, cH + 1, 2 * cW + 1]
-        #         mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
-        #         mu = mu[:, :, -1, cW]
-        #         new_out = input[:, :, i, j] - mu
-        #         if self.scale:
-        #             scale = scale[:, :, -1, cW]
-        #             new_out = new_out.div(scale + 1e-12)
-        #         out[:, :, i + cH, j + cW] = new_out
-
         return out[:, :, cH:cH + H, cW:cW + W]
 
     def backward_B(self, input: torch.Tensor, s=None) -> torch.Tensor:
@@ -376,23 +359,6 @@ class MaskedConvFlow(Flow):
             # [batch, channels, n]
             out[:, :, i_list, j_list] = new_out
             s_widths = s_widths - 1
-
-        # for i in reversed(range(H)):
-        #     si = i + cH
-        #     ti = i + 2 * cH + 1
-        #     for j in reversed(range(W)):
-        #         sj = j
-        #         tj = j + 2 * cW + 1
-        #         out_curr = out[:, :, si:ti, sj:tj]
-        #         s_curr = s if s is None else s[:, :, si:ti, sj:tj]
-        #         # [batch, channels, cH + 1, 2 * cW + 1]
-        #         mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
-        #         mu = mu[:, :, 0, cW]
-        #         new_out = input[:, :, i, j] - mu
-        #         if self.scale:
-        #             scale = scale[:, :, 0, cW]
-        #             new_out = new_out.div(scale + 1e-12)
-        #         out[:, :, i + cH, j + cW] = new_out
 
         return out[:, :, cH:cH + H, cW:cW + W]
 

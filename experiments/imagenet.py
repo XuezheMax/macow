@@ -319,12 +319,6 @@ else:
 
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
-
-s_time = time.time()
-with torch.no_grad():
-    sample(0)
-print('time: {:.1f}s'.format(time.time() - s_time))
-
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 for epoch in range(start_epoch, args.epochs + 1):

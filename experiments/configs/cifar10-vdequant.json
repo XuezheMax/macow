@@ -21,5 +21,6 @@
     "hidden_channels": 512,
     "s_channels": 4
   },
-  "ngpu": 2
+  "ngpu": 2,
+  "gpu_ids": [1, 0]
 }

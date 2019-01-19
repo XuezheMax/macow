@@ -11,5 +11,6 @@
     "bottom": true,
     "inverse": true
   },
-  "ngpu": 2
+  "ngpu": 2,
+  "gpu_id": 1
 }

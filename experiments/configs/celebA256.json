@@ -22,5 +22,6 @@
     "s_channels": 4,
     "bottom": false
   },
-  "ngpu": 2
+  "ngpu": 2,
+  "gpu_ids": [1, 0]
 }
