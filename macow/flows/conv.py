@@ -2,6 +2,7 @@ __author__ = 'max'
 
 from overrides import overrides
 from typing import Dict, Tuple
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -172,6 +173,7 @@ class GatedResNetBlock(nn.Module):
         self.masked_conv = MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order)
         self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
+        self.padding = self.masked_conv.padding
 
     def forward(self, x, s=None):
         c = self.masked_conv(x)
@@ -212,7 +214,7 @@ class MaskedConvFlow(Flow):
         if s_channels is None or s_channels <= 0:
             self.s_conv = None
         else:
-            self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net[0].padding)
+            self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net.padding)
 
     def calc_mu_and_scale(self, x: torch.Tensor, s=None):
         c = self.net(x, s=s)
@@ -267,49 +269,132 @@ class MaskedConvFlow(Flow):
 
     def backward_A(self, input: torch.Tensor, s=None) -> torch.Tensor:
         batch, channels, H, W = input.size()
-        out = input.new_zeros(batch, channels, H, W)
 
         kH, kW = self.kernel_size
         cH = kH // 2
         cW = kW // 2
-        for i in range(H):
-            si = max(0, i - cH)
-            for j in range(W):
-                sj = max(0, j - cW)
-                tj = min(W, j + cW + 1)
-                input_curr = input[:, :, si:i+1, sj:tj]
-                out_curr = out[:, :, si:i+1, sj:tj]
-                s_curr = s if s is None else s[:, :, si:i+1, sj:tj]
-                # [batch, channels, cH, cW]
-                mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
-                new_out = input_curr - mu
-                if self.scale:
-                    new_out = new_out.div(scale + 1e-12)
-                out[:, :, i, j] = new_out[:, :, -1, j - sj]
-        return out
+        out = input.new_zeros(batch, channels, H + 2 * cH, W + 2 * cW)
+        if s is not None:
+            s = F.pad(s, (cW, cW, cH, cH))
+
+        s_heights = np.arange(0, H, dtype=np.int64)
+        t_heights = s_heights + (cH + 1)
+        s_widths = np.array([-i * (cW + 1) for i in range(H)])
+        for t in range((cW + 1) * (H - 1) + W):
+            t_widths = s_widths + (2 * cW + 1)
+            out_curr = []
+            s_curr = []
+            in_curr = []
+            i_list = []
+            j_list = []
+            for si, ti, sj, tj in zip(s_heights, t_heights, s_widths, t_widths):
+                if -1 < sj < W:
+                    out_curr.append(out[:, :, si:ti, sj:tj])
+                    in_curr.append(input[:, :, si, sj])
+                    i_list.append(si + cH)
+                    j_list.append(sj + cW)
+                    if s is not None:
+                        s_curr.append(s[:, :, si:ti, sj:tj])
+            num = len(out_curr)
+            # [n * batch, channels, cH+1, 2*cW+1]
+            out_curr = torch.cat(out_curr, dim=0)
+            s_curr = s if s is None else torch.cat(s_curr, dim=0)
+            mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
+            # [n * batch, channels]
+            mu = mu[:, :, -1, cW]
+            in_curr = torch.cat(in_curr, dim=0)
+            new_out = in_curr - mu
+            if self.scale:
+                scale = scale[:, :, -1, cW]
+                new_out = new_out.div(scale + 1e-12)
+            new_out = new_out.view(num, batch, channels).permute(1, 2, 0)
+            # [batch, channels, n]
+            out[:, :, i_list, j_list] = new_out
+            s_widths = s_widths + 1
+
+        # for i in range(H):
+        #     si = i
+        #     ti = i + cH + 1
+        #     for j in range(W):
+        #         sj = j
+        #         tj = j + 2 * cW + 1
+        #         out_curr = out[:, :, si:ti, sj:tj]
+        #         s_curr = s if s is None else s[:, :, si:ti, sj:tj]
+        #         # [batch, channels, cH + 1, 2 * cW + 1]
+        #         mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
+        #         mu = mu[:, :, -1, cW]
+        #         new_out = input[:, :, i, j] - mu
+        #         if self.scale:
+        #             scale = scale[:, :, -1, cW]
+        #             new_out = new_out.div(scale + 1e-12)
+        #         out[:, :, i + cH, j + cW] = new_out
+
+        return out[:, :, cH:cH + H, cW:cW + W]
 
     def backward_B(self, input: torch.Tensor, s=None) -> torch.Tensor:
         batch, channels, H, W = input.size()
-        out = input.new_zeros(batch, channels, H, W)
 
         kH, kW = self.kernel_size
         cH = kH // 2
         cW = kW // 2
-        for i in reversed(range(H)):
-            si = min(H, i + cH + 1)
-            for j in reversed(range(W)):
-                sj = max(0, j - cW)
-                tj = min(W, j + cW + 1)
-                input_curr = input[:, :, i:si, sj:tj]
-                out_curr = out[:, :, i:si, sj:tj]
-                s_curr = s if s is None else s[:, :, i:si, sj:tj]
-                # [batch, channels, cH, cW]
-                mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
-                new_out = input_curr - mu
-                if self.scale:
-                    new_out = new_out.div(scale + 1e-12)
-                out[:, :, i, j] = new_out[:, :, 0, j - sj]
-        return out
+        out = input.new_zeros(batch, channels, H + 2 * cH, W + 2 * cW)
+        if s is not None:
+            s = F.pad(s, (cW, cW, cH, cH))
+
+        s_heights = np.arange(0, H, dtype=np.int64)
+        s_heights = s_heights[::-1] + cH
+        t_heights = s_heights + (cH + 1)
+        s_widths = np.array([W - 1 + i * (cW + 1) for i in range(H)])
+        for t in range((cW + 1) * (H - 1) + W):
+            t_widths = s_widths + (2 * cW + 1)
+            out_curr = []
+            s_curr = []
+            in_curr = []
+            i_list = []
+            j_list = []
+            for si, ti, sj, tj in zip(s_heights, t_heights, s_widths, t_widths):
+                if -1 < sj < W:
+                    out_curr.append(out[:, :, si:ti, sj:tj])
+                    in_curr.append(input[:, :, si - cH, sj])
+                    i_list.append(si)
+                    j_list.append(sj + cW)
+                    if s is not None:
+                        s_curr.append(s[:, :, si:ti, sj:tj])
+            num = len(out_curr)
+            # [n * batch, channels, cH+1, 2*cW+1]
+            out_curr = torch.cat(out_curr, dim=0)
+            s_curr = s if s is None else torch.cat(s_curr, dim=0)
+            mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
+            # [n * batch, channels]
+            mu = mu[:, :, 0, cW]
+            in_curr = torch.cat(in_curr, dim=0)
+            new_out = in_curr - mu
+            if self.scale:
+                scale = scale[:, :, 0, cW]
+                new_out = new_out.div(scale + 1e-12)
+            new_out = new_out.view(num, batch, channels).permute(1, 2, 0)
+            # [batch, channels, n]
+            out[:, :, i_list, j_list] = new_out
+            s_widths = s_widths - 1
+
+        # for i in reversed(range(H)):
+        #     si = i + cH
+        #     ti = i + 2 * cH + 1
+        #     for j in reversed(range(W)):
+        #         sj = j
+        #         tj = j + 2 * cW + 1
+        #         out_curr = out[:, :, si:ti, sj:tj]
+        #         s_curr = s if s is None else s[:, :, si:ti, sj:tj]
+        #         # [batch, channels, cH + 1, 2 * cW + 1]
+        #         mu, scale = self.calc_mu_and_scale(out_curr, s=s_curr)
+        #         mu = mu[:, :, 0, cW]
+        #         new_out = input[:, :, i, j] - mu
+        #         if self.scale:
+        #             scale = scale[:, :, 0, cW]
+        #             new_out = new_out.div(scale + 1e-12)
+        #         out[:, :, i + cH, j + cW] = new_out
+
+        return out[:, :, cH:cH + H, cW:cW + W]
 
     @overrides
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
