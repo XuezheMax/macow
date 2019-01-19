@@ -317,6 +317,10 @@ else:
     best_nent = 1e12
     best_nepd = 1e12
 
+s_time = time.time()
+sample(0)
+print('time: {:.1f}s'.format(time.time() - s_time))
+
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
 lr_min = lr / 100
