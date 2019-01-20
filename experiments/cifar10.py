@@ -29,7 +29,7 @@ parser.add_argument('--epochs', type=int, default=10000, metavar='N', help='numb
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
 parser.add_argument('--workers', default=1, type=int, metavar='N', help='number of data loading workers (default: 8)')
-parser.add_argument('--seed', type=int, default=6700417, metavar='S', help='random seed (default: 6700417)')
+parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 6700417)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
@@ -227,11 +227,14 @@ def sample(epoch):
     print('sampling')
     fgen.eval()
     n = 256
-    z = torch.randn(n, 3, imageSize, imageSize).to(device)
-    img, _ = fgen.decode(z)
-    img = postprocess(img, n_bits)
-    image_file = 'sample{}.png'.format(epoch)
-    save_image(img, os.path.join(result_path, image_file), nrow=16)
+    taus = [0.7, 0.8, 0.9, 1.0]
+    for t in taus:
+        z = torch.randn(n, 3, imageSize, imageSize).to(device)
+        z = z * t
+        img, _ = fgen.decode(z)
+        img = postprocess(img, n_bits)
+        image_file = 'sample{}.t{:.1f}.png'.format(epoch, t)
+        save_image(img, os.path.join(result_path, image_file), nrow=16)
 
 
 print(args)

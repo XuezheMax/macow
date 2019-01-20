@@ -231,11 +231,14 @@ def sample(epoch):
     print('sampling')
     fgen.eval()
     n = 256
-    z = torch.randn(n, 3, imageSize, imageSize).to(device)
-    img, _ = fgen.decode(z)
-    img = postprocess(img, n_bits)
-    image_file = 'sample{}.png'.format(epoch)
-    save_image(img, os.path.join(result_path, image_file), nrow=16)
+    taus = [0.7, 0.8, 0.9, 1.0]
+    for t in taus:
+        z = torch.randn(n, 3, imageSize, imageSize).to(device)
+        z = z * t
+        img, _ = fgen.decode(z)
+        img = postprocess(img, n_bits)
+        image_file = 'sample{}.t{:.1f}.png'.format(epoch, t)
+        save_image(img, os.path.join(result_path, image_file), nrow=16)
 
 
 print(args)
