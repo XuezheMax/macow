@@ -7,7 +7,6 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.nnet import Conv2dWeightNorm
-from macow.flows.conv import gate
 
 
 class NICEBlock(nn.Module):

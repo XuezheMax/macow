@@ -277,7 +277,7 @@ class MaCow(Flow):
     """
     Masked Convolutional Flow
     """
-    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=512, s_channels=0, dilations=None, scale=True, inverse=False, bottom=True):
+    def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels=256, s_channels=0, dilations=None, scale=True, inverse=False, bottom=True):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)

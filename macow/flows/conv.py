@@ -167,9 +167,9 @@ def gate(x1, x2):
     return x1 * x2.sigmoid_()
 
 
-class GatedResNetBlock(nn.Module):
+class MCFBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, hidden_channels, order):
-        super(GatedResNetBlock, self).__init__()
+        super(MCFBlock, self).__init__()
         self.masked_conv = MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order)
         self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
@@ -201,43 +201,32 @@ class MaskedConvFlow(Flow):
         self.in_channels = in_channels
         self.scale = scale
         if hidden_channels is None:
-            if in_channels <= 48:
-                hidden_channels = 4 * in_channels
-            else:
-                hidden_channels = min(2 * in_channels, 512)
-        out_channels = in_channels * 2
+            hidden_channels = min(4 * in_channels, 512)
+        out_channels = in_channels
         if scale:
             out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
         self.order = order
-        self.net = GatedResNetBlock(in_channels, out_channels, kernel_size, hidden_channels, order)
+        self.net = MCFBlock(in_channels, out_channels, kernel_size, hidden_channels, order)
         if s_channels is None or s_channels <= 0:
             self.s_conv = None
         else:
             self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net.padding)
 
     def calc_mu_and_scale(self, x: torch.Tensor, s=None):
-        c = self.net(x, s=s)
+        mu = self.net(x, s=s)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
-        c = self.net.init(x, s=s, init_scale=init_scale)
+        mu = self.net.init(x, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     @overrides
