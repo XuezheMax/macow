@@ -2,12 +2,12 @@
   "flow": {
     "type": "macow",
     "levels": 7,
-    "num_steps": [2, [10, 10], [8, 8], [8, 8], [8, 8], [4, 4], 2],
+    "num_steps": [2, [12, 12], [12, 12], [8, 8], [8, 8], [4, 4], 2],
     "factors": [4, 4, 4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
-    "hidden_channels": 512,
+    "hidden_channels": 256,
     "bottom": true,
     "inverse": true
   },
