@@ -12,12 +12,12 @@
     "inverse": true
   },
   "dequant": {
-    "levels": 3,
-    "num_steps": [4, [4], 4],
-    "factors": [2],
+    "levels": 2,
+    "num_steps": [4, 4],
+    "factors": [],
     "in_channels": 3,
     "kernel_size": 3,
-    "scale": false,
+    "scale": true,
     "hidden_channels": 256,
     "s_channels": 4,
     "bottom": true
