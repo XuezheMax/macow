@@ -12,8 +12,8 @@
     "inverse": true
   },
   "dequant": {
-    "levels": 3,
-    "num_steps": [4, [4], 4],
+    "levels": 2,
+    "num_steps": [6, 4],
     "factors": [2],
     "in_channels": 3,
     "kernel_size": 3,
