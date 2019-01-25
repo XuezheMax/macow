@@ -2,11 +2,15 @@
   "flow": {
     "type": "macow",
     "levels": 6,
-    "num_steps": [2, 24, 32, 48, 48, 48],
+    "num_steps": [4, [24, 24], [24, 24], [16, 16], [16, 16], 4],
+    "factors": [4, 4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
+    "hidden_channels": 256,
+    "bottom": true,
     "inverse": true
   },
-  "ngpu": 8
+  "ngpu": 2,
+  "gpu_id": 1
 }
