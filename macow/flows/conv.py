@@ -27,17 +27,14 @@ class Conv1x1Flow(Flow):
     @overrides
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             h: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         batch, channels, H, W = input.size()
         out = F.conv2d(input, self.weight.view(self.in_channels, self.in_channels, 1, 1))
@@ -47,17 +44,14 @@ class Conv1x1Flow(Flow):
     @overrides
     def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             h: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         batch, channels, H, W = input.size()
         out = F.conv2d(input, self.weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
@@ -101,17 +95,14 @@ class Conv1x1WeightNormFlow(Flow):
     @overrides
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             h: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         batch, channels, H, W = input.size()
         weight = self.compute_weight()
@@ -122,17 +113,14 @@ class Conv1x1WeightNormFlow(Flow):
     @overrides
     def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             h: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         batch, channels, H, W = input.size()
         weight = self.compute_weight()
@@ -205,7 +193,7 @@ class MaskedConvFlow(Flow):
                 hidden_channels = 4 * in_channels
             else:
                 hidden_channels = min(2 * in_channels, 512)
-        out_channels = in_channels * 2
+        out_channels = in_channels
         if scale:
             out_channels = out_channels * 2
         self.kernel_size = _pair(kernel_size)
@@ -217,43 +205,32 @@ class MaskedConvFlow(Flow):
             self.s_conv = Conv2dWeightNorm(s_channels, hidden_channels, kernel_size, bias=True, padding=self.net.padding)
 
     def calc_mu_and_scale(self, x: torch.Tensor, s=None):
-        c = self.net(x, s=s)
+        mu = self.net(x, s=s)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     def init_net(self, x, s=None, init_scale=1.0):
-        c = self.net.init(x, s=s, init_scale=init_scale)
+        mu = self.net.init(x, s=s, init_scale=init_scale)
         scale = None
         if self.scale:
-            mu1, mu2, log_scale1, log_scale2 = c.chunk(4, dim=1)
-            log_scale = gate(log_scale1, log_scale2)
+            mu, log_scale = mu.chunk(2, dim=1)
             scale = log_scale.add_(2.).sigmoid_()
-        else:
-            mu1, mu2 = c.chunk(2, dim=1)
-        mu = gate(mu1, mu2)
         return mu, scale
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         if self.s_conv is not None:
             s = self.s_conv(s)
@@ -365,17 +342,14 @@ class MaskedConvFlow(Flow):
     @overrides
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         if self.s_conv is not None:
             ss = self.s_conv(s)
