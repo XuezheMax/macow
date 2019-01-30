@@ -164,7 +164,7 @@ class Conv1x1WeightNormFlow(Flow):
 
 
 def gate(x1, x2):
-    return x1 * x2.sigmoid()
+    return x1 * x2.sigmoid_()
 
 
 class MCFBlock(nn.Module):
