@@ -291,7 +291,7 @@ class MaCow(Flow):
         if slices is None:
             slices = [None] * levels
         else:
-            slices = slices + [0]
+            slices = [0] + slices
         assert levels == len(factors)
         assert levels == len(slices)
         blocks = []
