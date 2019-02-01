@@ -110,9 +110,11 @@ class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (no squeeze nor split)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, s_channels, scale=False, inverse=False):
+    def __init__(self, num_steps, in_channels, kernel_size, s_channels, scale=False, inverse=False,
+                 coupling_type='conv', slice=None):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, None, s_channels, scale=scale, inverse=inverse,
+                           coupling_type=coupling_type, slice=slice, heads=1) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -152,8 +154,8 @@ class MaCowTopBlock(Flow):
     def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels,
                  scale=True, inverse=False, coupling_type='conv', slice=None, heads=1):
         super(MaCowTopBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels,
-                           scale=scale, inverse=inverse, coupling_type=coupling_type, slice=slice, heads=heads) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
+                           coupling_type=coupling_type, slice=slice, heads=heads) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
@@ -199,8 +201,8 @@ class MaCowInternalBlock(Flow):
         self.priors = nn.ModuleList()
         channel_step = in_channels // factor
         for num_step in num_steps:
-            layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels,
-                               scale=scale, inverse=inverse, coupling_type=coupling_type, slice=slice, heads=heads) for _ in range(num_step)]
+            layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
+                               coupling_type=coupling_type, slice=slice, heads=heads) for _ in range(num_step)]
             self.layers.append(nn.ModuleList(layer))
             prior = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=True, inverse=inverse, factor=factor)
             self.priors.append(prior)
@@ -289,8 +291,6 @@ class MaCow(Flow):
         factors = [0] + factors + [0] if bottom else factors + [0]
         if slices is None:
             slices = [None] * levels
-        else:
-            slices = [0] + slices
         assert levels == len(factors)
         assert levels == len(slices)
         blocks = []
@@ -299,7 +299,8 @@ class MaCow(Flow):
         for level in range(levels):
             slice = slices[level]
             if level == 0 and bottom:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels, scale=scale, inverse=inverse)
+                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, s_channels,
+                                               scale=scale, inverse=inverse, coupling_type=coupling_type, slice=slice)
                 blocks.append(macow_block)
             elif level == levels - 1:
                 in_channels = in_channels * 4
