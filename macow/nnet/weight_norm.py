@@ -31,7 +31,7 @@ class LinearWeightNorm(nn.Module):
     def init(self, x, init_scale=1.0):
         with torch.no_grad():
             # [batch, out_features]
-            out = self(x)
+            out = self(x).view(-1, self.linear.out_features)
             # [out_features]
             mean = out.mean(dim=0)
             std = out.std(dim=0)
