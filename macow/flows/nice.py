@@ -63,7 +63,7 @@ class NICESelfAttnBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads):
         super(NICESelfAttnBlock, self).__init__()
         self.linear1 = LinearWeightNorm(in_channels + s_channels, hidden_channels, bias=True)
-        num_layers = 2
+        num_layers = 1
         attns = [SelfAttnLayer(hidden_channels, heads, slice) for _ in range(num_layers)]
         self.attns = nn.ModuleList(attns)
         self.linear2 = LinearWeightNorm(hidden_channels, hidden_channels, bias=True)
