@@ -114,7 +114,7 @@ class MaCowBottomBlock(Flow):
                  coupling_type='conv', slice=None):
         super(MaCowBottomBlock, self).__init__(inverse)
         steps = [MaCowStep(in_channels, kernel_size, None, s_channels, scale=scale, inverse=inverse,
-                           coupling_type=coupling_type, slice=slice, heads=1) for _ in range(num_steps)]
+                           coupling_type='conv', slice=slice, heads=1) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
