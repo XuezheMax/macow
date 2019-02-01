@@ -50,6 +50,7 @@ class SelfAttnLayer(nn.Module):
         self.attn = MultiHeadAttention(features, heads)
         # self.gn = nn.GroupNorm(heads, features)
         timesteps = slice[0] * slice[1]
+        # dim_per_head = features // heads
         self.gn = nn.LayerNorm([timesteps, features])
 
     def forward(self, x, pos_enc=None):
