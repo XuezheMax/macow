@@ -57,7 +57,9 @@ class MultiHeadAttention(nn.Module):
         # [3, batch, heads, timesteps, dim]
         c = c.permute(2, 0, 3, 1, 4)
         # [batch, heads, timesteps, dim]
-        queries, keys, values = c.chunk(3, dim=0)
+        queries = c[0]
+        keys = c[1]
+        values = c[2]
         # attention weights [batch, heads, timesteps, timesteps]
         attn_weights = torch.matmul(queries, keys.transpose(2, 3)).div(math.sqrt(dim))
         attn_weights = self.softmax(attn_weights)
