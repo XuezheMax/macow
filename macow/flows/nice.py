@@ -2,16 +2,19 @@ __author__ = 'max'
 
 from overrides import overrides
 from typing import Tuple, Dict
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
-from macow.nnet import Conv2dWeightNorm
+from macow.nnet.weight_norm import Conv2dWeightNorm, LinearWeightNorm
+from macow.nnet.attention import MultiHeadAttention
 
 
-class NICEBlock(nn.Module):
+class NICEConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, dilation):
-        super(NICEBlock, self).__init__()
+        super(NICEConvBlock, self).__init__()
         self.conv1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
         self.conv2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.conv3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=3, dilation=dilation, padding=dilation, bias=True)
@@ -41,8 +44,106 @@ class NICEBlock(nn.Module):
         return out
 
 
+class SelfAttnLayer(nn.Module):
+    def __init__(self, features, heads):
+        super(SelfAttnLayer, self).__init__()
+        self.attn = MultiHeadAttention(features, heads)
+        self.gn = nn.GroupNorm(heads, features)
+
+    def forward(self, x, pos_enc=None):
+        return self.gn(self.attn(x, pos_enc=pos_enc))
+
+    def init(self, x, pos_enc=None, init_scale=1.0):
+        return self.gn(self.attn.init(x, pos_enc=pos_enc, init_scale=init_scale))
+
+
+class NICESelfAttnBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads):
+        super(NICESelfAttnBlock, self).__init__()
+        self.linear1 = LinearWeightNorm(in_channels + s_channels, hidden_channels, bias=True)
+        num_layers = 2
+        attns = [SelfAttnLayer(hidden_channels, heads) for _ in range(num_layers)]
+        self.attns = nn.ModuleList(attns)
+        self.linear2 = LinearWeightNorm(hidden_channels, hidden_channels, bias=True)
+        self.activation = nn.ELU(inplace=True)
+        self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+        self.slice_height, self.slice_width = slice
+        # positional enc
+        self.register_buffer('pos_enc', torch.zeros(self.slice_height * self.slice_width, hidden_channels))
+        pos_enc = np.array([[pos / np.power(10000, 2.0 * (i // 2) / hidden_channels) for i in range(hidden_channels)]
+                             for pos in range(self.slice_height * self.slice_width)])
+        pos_enc[:, 0::2] = np.sin(pos_enc[:, 0::2])
+        pos_enc[:, 1::2] = np.cos(pos_enc[:, 1::2])
+        self.pos_enc.copy_(torch.from_numpy(pos_enc).float())
+
+    def forward(self, x, s=None):
+        # [batch, in+s, height, width]
+        if s is not None:
+            x = torch.cat([x, s], dim=1)
+        # [batch, fh, fw, slice_heigth, slice_width, in+s]
+        x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
+        # [batch, fh, fw, slice_heigth, slice_width, hidden]
+        x = self.linear1(x)
+        bs, fh, fw, sh, sw, hc = x.size()
+        # [batch*fh*fw, slice_heigth*slice_width, hidden]
+        x = x.view(bs * fh * fw, sh * sw, hc)
+        for attn in self.attns:
+            x = attn(x, pos_enc=self.pos_enc)
+
+        # unslice2d
+        # [batch, fh, fw, slice_heigth, slice_width, hidden] -> [batch, fh, slice_height, fw, slice_width, hidden]
+        x = x.view(bs, fh, fw, sh, sw, hc).transpose(2, 3)
+        # [batch, fh, slice_height, fw, slice_width, hidden]
+        x = self.activation(self.linear2(x))
+        # [batch, height, width, hidden] -> [batch, hidden, height, width]
+        x = x.view(bs, fh * sh, fw * sw, -1).permute(0, 3, 1, 2)
+
+        # compute output
+        out = self.conv1x1(x)
+        return out
+
+    def init(self, x, s=None, init_scale=1.0):
+        # [batch, in+s, height, width]
+        if s is not None:
+            x = torch.cat([x, s], dim=1)
+        # [batch, fh, fw, slice_heigth, slice_width, in+s]
+        x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
+        # [batch, fh, fw, slice_heigth, slice_width, hidden]
+        x = self.linear1.init(x, init_scale=init_scale)
+        bs, fh, fw, sh, sw, hc = x.size()
+        # [batch*fh*fw, slice_heigth*slice_width, hidden]
+        x = x.view(bs * fh * fw, sh * sw, hc)
+        for attn in self.attns:
+            x = attn.init(x, pos_enc=self.pos_enc, init_scale=init_scale)
+
+        # unslice2d
+        # [batch, fh, fw, slice_heigth, slice_width, hidden] -> [batch, fh, slice_height, fw, slice_width, hidden]
+        x = x.view(bs, fh, fw, sh, sw, hc).transpose(2, 3)
+        # [batch, fh, slice_height, fw, slice_width, hidden]
+        x = self.activation(self.linear2.init(x, init_scale=init_scale))
+        # [batch, height, width, hidden] -> [batch, hidden, height, width]
+        x = x.view(bs, fh * sh, fw * sw, -1).permute(0, 3, 1, 2)
+
+        # compute output
+        out = self.conv1x1.init(x, init_scale=0.0)
+        return out
+
+    @staticmethod
+    def slice2d(x: torch.Tensor, slice_height, slice_width) -> torch.Tensor:
+        batch, n_channels, height, width = x.size()
+        assert height % slice_height == 0 and width % slice_width == 0
+        fh = height // slice_height
+        fw = width // slice_width
+
+        # [batch, channels, height, width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
+        x = x.view(-1, n_channels, fh, slice_height, fw, slice_width)
+        # [batch, channels, factor_height, slice_height, factor_width, slice_width] -> [batch, factor_height, factor_width, slice_height, slice_width, channels]
+        x = x.permute(0, 2, 4, 3, 5, 1)
+        return x
+
+
 class NICE(Flow):
-    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, dilation=1, factor=2):
+    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2, type='conv', slice=None, heads=1):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
@@ -55,7 +156,13 @@ class NICE(Flow):
             out_channels = out_channels * 2
         if s_channels is None:
             s_channels = 0
-        self.net = NICEBlock(in_channels, out_channels, hidden_channels=hidden_channels, s_channels=s_channels, dilation=dilation)
+        assert type in ['conv', 'self_attn']
+        if type == 'conv':
+            self.net = NICEConvBlock(in_channels, out_channels, hidden_channels, s_channels, dilation=1)
+        else:
+            assert slice is not None, 'slice should be given.'
+            slice = _pair(slice)
+            self.net = NICESelfAttnBlock(in_channels, out_channels, hidden_channels, s_channels, slice=slice, heads=heads)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)

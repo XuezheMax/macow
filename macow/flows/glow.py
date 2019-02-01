@@ -16,11 +16,12 @@ class GlowStep(Flow):
     """
     A step of Glow. A Conv1x1 followed with a NICE
     """
-    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, dilation=1):
+    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1):
         super(GlowStep, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, dilation=dilation)
+        self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels,
+                             scale=scale, inverse=inverse, type=coupling_type, slice=slice, heads=heads)
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:

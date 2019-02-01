@@ -40,12 +40,6 @@ def squeeze2d(x, factor=2) -> torch.Tensor:
     return x
 
 
-def split2d(x: torch.Tensor, z1_channels) -> Tuple[torch.Tensor, torch.Tensor]:
-    z1 = x[:, :z1_channels]
-    z2 = x[:, z1_channels:]
-    return z1, z2
-
-
 def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     factor = int(factor)
     assert factor >= 1
@@ -68,6 +62,12 @@ def unsqueeze2d(x: torch.Tensor, factor=2) -> torch.Tensor:
     # [batch, channels/(factor*factor), height*factor, width*factor]
     x = x.view(-1, n_channels // num_bins, height * factor, width * factor)
     return x
+
+
+def split2d(x: torch.Tensor, z1_channels) -> Tuple[torch.Tensor, torch.Tensor]:
+    z1 = x[:, :z1_channels]
+    z2 = x[:, z1_channels:]
+    return z1, z2
 
 
 def unsplit2d(xs: List[torch.Tensor]) -> torch.Tensor:
