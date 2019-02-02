@@ -7,7 +7,7 @@
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
-    "hidden_channels": [24, 192, 256, 256],
+    "hidden_channels": [16, 160, 192, 192],
     "bottom": true,
     "coupling_type": "self_attn",
     "slices": [8, 8, 4, 4],
