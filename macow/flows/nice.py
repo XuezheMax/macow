@@ -135,7 +135,8 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, factor_height, factor_width, hidden, slice_height, slice_width]
         x = self.nin1.init(x, init_scale=init_scale) if init else self.nin1(x)
         # [batch * factor_height * factor_width, hidden, slice_height, slice_width]
-        x = x.view(-1, n_channels, slice_height, slice_width)
+        hidden_channels = x.size(3)
+        x = x.view(-1, hidden_channels, slice_height, slice_width)
         return x
 
     def unslice2d(self, x: torch.Tensor, height, width, init, init_scale=1.0) -> torch.Tensor:
