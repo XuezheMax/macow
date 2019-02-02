@@ -62,9 +62,7 @@ class NICESelfAttnBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, train_pos_enc=False):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
-        num_layers = 2
-        attns = [SelfAttnLayer(hidden_channels, heads) for _ in range(num_layers)]
-        self.attns = nn.ModuleList(attns)
+        self.attn = SelfAttnLayer(hidden_channels, heads)
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
@@ -89,8 +87,7 @@ class NICESelfAttnBlock(nn.Module):
         # slice2d
         # [batch*fh*fw, hidden, slice_heigth, slice_width]
         x = self.slice2d(x, self.slice_height, self.slice_width, init=False)
-        for attn in self.attns:
-            x = attn(x, pos_enc=self.pos_enc)
+        x = self.attn(x, pos_enc=self.pos_enc)
 
         # unslice2d
         # [batch, hidden, height, width]
@@ -109,8 +106,7 @@ class NICESelfAttnBlock(nn.Module):
         # slice2d
         # [batch*fh*fw, hidden, slice_heigth, slice_width]
         x = self.slice2d(x, self.slice_height, self.slice_width, init=True, init_scale=init_scale)
-        for attn in self.attns:
-            x = attn.init(x, pos_enc=self.pos_enc, init_scale=init_scale)
+        x = self.attn.init(x, pos_enc=self.pos_enc, init_scale=init_scale)
 
         # unslice2d
         # [batch, hidden, height, width]
