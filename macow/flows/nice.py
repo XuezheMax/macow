@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
-from macow.nnet.weight_norm import Conv2dWeightNorm
+from macow.nnet.weight_norm import Conv2dWeightNorm, NIN2d, NIN4d
 from macow.nnet.attention import MultiHeadAttention2d
 
 
@@ -60,13 +60,13 @@ class SelfAttnLayer(nn.Module):
 class NICESelfAttnBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, pos_enc=True):
         super(NICESelfAttnBlock, self).__init__()
-        self.nin1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=1, bias=True)
+        self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         num_layers = 2
         attns = [SelfAttnLayer(hidden_channels, heads) for _ in range(num_layers)]
         self.attns = nn.ModuleList(attns)
-        self.nin2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
+        self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
-        self.nin3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+        self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
         if pos_enc:
@@ -89,18 +89,14 @@ class NICESelfAttnBlock(nn.Module):
             x = torch.cat([x, s], dim=1)
 
         # slice2d
-        # [batch*fh*fw, in+s, slice_heigth, slice_width]
-        x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
         # [batch*fh*fw, hidden, slice_heigth, slice_width]
-        x = self.nin1(x)
+        x = self.slice2d(x, self.slice_height, self.slice_width, init=False)
         for attn in self.attns:
             x = attn(x, pos_enc=self.pos_enc)
 
         # unslice2d
         # [batch, hidden, height, width]
-        x = NICESelfAttnBlock.unslice2d(x, height, width)
-        # [batch, hidden, height, width]
-        x = self.activation(self.nin2(x))
+        x = self.unslice2d(x, height, width, init=False)
         # compute output
         # [batch, out, height, width]
         out = self.nin3(x)
@@ -113,25 +109,20 @@ class NICESelfAttnBlock(nn.Module):
             x = torch.cat([x, s], dim=1)
 
         # slice2d
-        # [batch*fh*fw, in+s, slice_heigth, slice_width]
-        x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
         # [batch*fh*fw, hidden, slice_heigth, slice_width]
-        x = self.nin1.init(x, init_scale=init_scale)
+        x = self.slice2d(x, self.slice_height, self.slice_width, init=True, init_scale=init_scale)
         for attn in self.attns:
             x = attn.init(x, pos_enc=self.pos_enc, init_scale=init_scale)
 
         # unslice2d
         # [batch, hidden, height, width]
-        x = NICESelfAttnBlock.unslice2d(x, height, width)
-        # [batch, hidden, height, width]
-        x = self.activation(self.nin2.init(x, init_scale=init_scale))
+        x = self.unslice2d(x, height, width, init=True, init_scale=init_scale)
         # compute output
         # [batch, out, height, width]
         out = self.nin3.init(x, init_scale=0.0)
         return out
 
-    @staticmethod
-    def slice2d(x: torch.Tensor, slice_height, slice_width) -> torch.Tensor:
+    def slice2d(self, x: torch.Tensor, slice_height, slice_width, init, init_scale=1.0) -> torch.Tensor:
         batch, n_channels, height, width = x.size()
         assert height % slice_height == 0 and width % slice_width == 0
         fh = height // slice_height
@@ -140,13 +131,14 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, channels, height, width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.view(-1, n_channels, fh, slice_height, fw, slice_width)
         # [batch, channels, factor_height, slice_height, factor_width, slice_width] -> [batch, factor_height, factor_width, channels, slice_height, slice_width]
-        x = x.permute(0, 2, 4, 1, 3, 5).contiguous()
-        # [batch * factor_height * factor_width, channels, slice_height, slice_width]
+        x = x.permute(0, 2, 4, 1, 3, 5)
+        # [batch, factor_height, factor_width, hidden, slice_height, slice_width]
+        x = self.nin1.init(x, init_scale=init_scale) if init else self.nin1(x)
+        # [batch * factor_height * factor_width, hidden, slice_height, slice_width]
         x = x.view(-1, n_channels, slice_height, slice_width)
         return x
 
-    @staticmethod
-    def unslice2d(x: torch.Tensor, height, width) -> torch.Tensor:
+    def unslice2d(self, x: torch.Tensor, height, width, init, init_scale=1.0) -> torch.Tensor:
         _, n_channels, slice_height, slice_width = x.size()
         assert height % slice_height == 0 and width % slice_width == 0
         fh = height // slice_height
@@ -155,7 +147,10 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, factor_height, factor_width, channels, slice_height, slice_width]
         x = x.view(-1, fh, fw, n_channels, slice_height, slice_width)
         # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
-        x = x.permute(0, 3, 1, 4, 2, 5).contiguous()
+        x = x.permute(0, 3, 1, 4, 2, 5)
+        # [batch, channels, factor_height, slice_height, factor_width, slice_width]
+        x = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
+        x = self.activation(x)
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
         return x

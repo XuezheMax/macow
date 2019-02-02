@@ -11,6 +11,116 @@ from torch.nn import Parameter
 from macow.utils import norm
 
 
+class NIN2d(nn.Module):
+    def __init__(self, in_features, out_features, bias=True):
+        super(NIN2d, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight_v = Parameter(torch.Tensor(out_features, in_features))
+        self.weight_g = Parameter(torch.Tensor(out_features, 1))
+        if bias:
+            self.bias = Parameter(torch.Tensor(out_features, 1, 1))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
+        self.weight_g.data.copy_(norm(self.weight_v, 0))
+        if self.bias is not None:
+            nn.init.constant_(self.bias, 0)
+
+    def compute_weight(self):
+        return self.weight_v * (self.weight_g / norm(self.weight_v, 0))
+
+    def forward(self, input):
+        weight = self.compute_weight()
+        out = torch.einsum('...cij,oc->...oij', input, weight)
+        if self.bias is not None:
+            out = out + self.bias
+        return out
+
+    def extra_repr(self):
+        return 'in_features={}, out_features={}, bias={}'.format(
+            self.in_features, self.out_features, self.bias is not None
+        )
+
+    def init(self, x, init_scale=1.0):
+        with torch.no_grad():
+            out_features, height, width = x.size()[-3:]
+            assert out_features == self.out_features
+            # [batch, out_features, h * w] - > [batch, h * w, out_features]
+            out = self(x).view(-1, out_features, height * width).transpose(1, 2)
+            # [batch*height*width, out_features]
+            out = out.contiguous().view(-1, out_features)
+            # [out_features]
+            mean = out.mean(dim=0)
+            std = out.std(dim=0)
+            inv_stdv = init_scale / (std + 1e-6)
+
+            self.weight_g.mul_(inv_stdv.unsqueeze(1))
+            if self.bias is not None:
+                mean = mean.view(out_features, 1, 1)
+                inv_stdv = inv_stdv.view(out_features, 1, 1)
+                self.bias.add_(-mean).mul_(inv_stdv)
+            return self(x)
+
+
+class NIN4d(nn.Module):
+    def __init__(self, in_features, out_features, bias=True):
+        super(NIN4d, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight_v = Parameter(torch.Tensor(out_features, in_features))
+        self.weight_g = Parameter(torch.Tensor(out_features, 1))
+        if bias:
+            self.bias = Parameter(torch.Tensor(out_features, 1, 1, 1, 1))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.normal_(self.weight_v, mean=0.0, std=0.05)
+        self.weight_g.data.copy_(norm(self.weight_v, 0))
+        if self.bias is not None:
+            nn.init.constant_(self.bias, 0)
+
+    def compute_weight(self):
+        return self.weight_v * (self.weight_g / norm(self.weight_v, 0))
+
+    def forward(self, input):
+        weight = self.compute_weight()
+        out = torch.einsum('bc...,oc->bo...', input, weight)
+        if self.bias is not None:
+            out = out + self.bias
+        return out
+
+    def extra_repr(self):
+        return 'in_features={}, out_features={}, bias={}'.format(
+            self.in_features, self.out_features, self.bias is not None
+        )
+
+    def init(self, x, init_scale=1.0):
+        with torch.no_grad():
+            batch, out_features = x.size()[:2]
+            assert out_features == self.out_features
+            # [batch, out_features, h * w] - > [batch, h * w, out_features]
+            out = self(x).view(batch, out_features, -1).transpose(1, 2)
+            # [batch*height*width, out_features]
+            out = out.contiguous().view(-1, out_features)
+            # [out_features]
+            mean = out.mean(dim=0)
+            std = out.std(dim=0)
+            inv_stdv = init_scale / (std + 1e-6)
+
+            self.weight_g.mul_(inv_stdv.unsqueeze(1))
+            if self.bias is not None:
+                mean = mean.view(out_features, 1, 1, 1, 1)
+                inv_stdv = inv_stdv.view(out_features, 1, 1, 1, 1)
+                self.bias.add_(-mean).mul_(inv_stdv)
+            return self(x)
+
+
 class LinearWeightNorm(nn.Module):
     def __init__(self, in_features, out_features, bias=True):
         super(LinearWeightNorm, self).__init__()
