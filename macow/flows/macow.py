@@ -110,11 +110,9 @@ class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (no squeeze nor split)
     """
-    def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels, scale=False, inverse=False,
-                 coupling_type='conv', slice=None, train_pos_enc=True):
+    def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels, scale=False, inverse=False):
         super(MaCowBottomBlock, self).__init__(inverse)
-        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
-                           coupling_type=coupling_type, slice=slice, heads=1, train_pos_enc=train_pos_enc) for _ in range(num_steps)]
+        steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
 
     @overrides
