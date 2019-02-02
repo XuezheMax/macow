@@ -151,10 +151,6 @@ class Conv1x1WeightNormFlow(Flow):
         return Conv1x1WeightNormFlow(**params)
 
 
-def gate(x1, x2):
-    return x1 * x2.sigmoid_()
-
-
 class MCFBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, hidden_channels, order):
         super(MCFBlock, self).__init__()

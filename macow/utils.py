@@ -102,6 +102,10 @@ def logPlusOne(x):
     return x.mul(x.mul(-0.5) + 1.0) * mask + (x + 1.0).log() * (1.0 - mask)
 
 
+def gate(x1, x2):
+    return x1 * x2.sigmoid_()
+
+
 def total_grad_norm(parameters, norm_type=2):
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
