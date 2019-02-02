@@ -4,7 +4,7 @@ from overrides import overrides
 import math
 import torch
 import torch.nn as nn
-from macow.nnet.weight_norm import LinearWeightNorm
+from macow.nnet.weight_norm import LinearWeightNorm, Conv2dWeightNorm
 
 
 class MultiHeadAttention(nn.Module):
@@ -69,4 +69,69 @@ class MultiHeadAttention(nn.Module):
         # [batch, timesteps, heads, dim]
         out = x.view(bs, timesteps, heads, dim) + out.transpose(1, 2)
         out = out.view(bs, timesteps, features)
+        return out
+
+
+class MultiHeadAttention2d(nn.Module):
+    def __init__(self, channels, heads):
+        super(MultiHeadAttention2d, self).__init__()
+        self.proj = Conv2dWeightNorm(channels, 3 * channels, 1, bias=True)
+        self.softmax = nn.Softmax(dim=-1)
+        assert channels % heads == 0
+        self.features = channels
+        self.heads = heads
+
+    @overrides
+    def forward(self, x, pos_enc=None):
+        # [batch, channels, height, width]
+        if pos_enc is not None:
+            x = x + pos_enc
+        bs, channels, height, width = x.size()
+        heads = self.heads
+        dim = channels // heads
+        # [batch, 3 * channels, height, width]
+        c = self.proj(x)
+        # [batch, 3, heads, dim, height, width]
+        c = c.view(bs, 3, heads, dim, height, width)
+        # [batch, heads, dim, height, width]
+        queries = c[:, 0]
+        keys = c[:, 1]
+        # [batch, heads, dim, timesteps]
+        values = c[:, 2].view(bs, heads, dim, height * width)
+        # attention weights [batch, heads, height, width, height, width]
+        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', queries, keys).div(math.sqrt(dim))
+        # attention weights [batch, heads, height, width, timesteps]
+        attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
+        # values [batch, heads, dim, height, width]
+        out = torch.einsum('bhdt,bhijt->bhdij', values, attn_weights)
+        # merge heads
+        # [batch, channels, heads, dim]
+        out = x + out.view(bs, channels, height, width)
+        return out
+
+    def init(self, x, pos_enc=None, init_scale=1.0):
+        # [batch, channels, height, width]
+        if pos_enc is not None:
+            x = x + pos_enc
+        bs, channels, height, width = x.size()
+        heads = self.heads
+        dim = channels // heads
+        # [batch, 3 * channels, height, width]
+        c = self.proj.init(x, init_scale=init_scale)
+        # [batch, 3, heads, dim, height, width]
+        c = c.view(bs, 3, heads, dim, height, width)
+        # [batch, heads, dim, height, width]
+        queries = c[:, 0]
+        keys = c[:, 1]
+        # [batch, heads, dim, timesteps]
+        values = c[:, 2].view(bs, heads, dim, height * width)
+        # attention weights [batch, heads, height, width, height, width]
+        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', queries, keys).div(math.sqrt(dim))
+        # attention weights [batch, heads, height, width, timesteps]
+        attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
+        # values [batch, heads, dim, height, width]
+        out = torch.einsum('bhdt,bhijt->bhdij', values, attn_weights)
+        # merge heads
+        # [batch, channels, heads, dim]
+        out = x + out.view(bs, channels, height, width)
         return out

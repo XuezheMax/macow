@@ -8,8 +8,8 @@ import torch.nn as nn
 from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
-from macow.nnet.weight_norm import Conv2dWeightNorm, LinearWeightNorm
-from macow.nnet.attention import MultiHeadAttention
+from macow.nnet.weight_norm import Conv2dWeightNorm
+from macow.nnet.attention import MultiHeadAttention2d
 
 
 class NICEConvBlock(nn.Module):
@@ -45,13 +45,10 @@ class NICEConvBlock(nn.Module):
 
 
 class SelfAttnLayer(nn.Module):
-    def __init__(self, features, heads, slice):
+    def __init__(self, features, heads):
         super(SelfAttnLayer, self).__init__()
-        self.attn = MultiHeadAttention(features, heads)
-        # self.gn = nn.GroupNorm(heads, features)
-        timesteps = slice[0] * slice[1]
-        # dim_per_head = features // heads
-        self.gn = nn.LayerNorm([timesteps, features])
+        self.attn = MultiHeadAttention2d(features, heads)
+        self.gn = nn.GroupNorm(heads, features)
 
     def forward(self, x, pos_enc=None):
         return self.gn(self.attn(x, pos_enc=pos_enc))
@@ -63,72 +60,71 @@ class SelfAttnLayer(nn.Module):
 class NICESelfAttnBlock(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads):
         super(NICESelfAttnBlock, self).__init__()
-        self.linear1 = LinearWeightNorm(in_channels + s_channels, hidden_channels, bias=True)
+        self.nin1 = Conv2dWeightNorm(in_channels + s_channels, hidden_channels, kernel_size=1, bias=True)
         num_layers = 1
-        attns = [SelfAttnLayer(hidden_channels, heads, slice) for _ in range(num_layers)]
+        attns = [SelfAttnLayer(hidden_channels, heads) for _ in range(num_layers)]
         self.attns = nn.ModuleList(attns)
-        self.linear2 = LinearWeightNorm(hidden_channels, hidden_channels, bias=True)
+        self.nin2 = Conv2dWeightNorm(hidden_channels, hidden_channels, kernel_size=1, bias=True)
         self.activation = nn.ELU(inplace=True)
-        self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
+        self.nin3 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
-        self.register_buffer('pos_enc', torch.zeros(self.slice_height * self.slice_width, hidden_channels))
-        pos_enc = np.array([[pos / np.power(10000, 2.0 * (i // 2) / hidden_channels) for i in range(hidden_channels)]
-                             for pos in range(self.slice_height * self.slice_width)])
-        pos_enc[:, 0::2] = np.sin(pos_enc[:, 0::2])
-        pos_enc[:, 1::2] = np.cos(pos_enc[:, 1::2])
+        self.register_buffer('pos_enc', torch.zeros(hidden_channels, self.slice_height, self.slice_width))
+        pos_enc = np.array([[[(h * self.slice_width + w) / np.power(10000, 2.0 * (i // 2) / hidden_channels)
+                              for i in range(hidden_channels)]
+                             for w in range(self.slice_width)]
+                             for h in range(self.slice_height)])
+        pos_enc[:, :, 0::2] = np.sin(pos_enc[:, :, 0::2])
+        pos_enc[:, :, 1::2] = np.cos(pos_enc[:, :, 1::2])
+        pos_enc = np.transpose(pos_enc, (2, 0, 1))
         self.pos_enc.copy_(torch.from_numpy(pos_enc).float())
 
     def forward(self, x, s=None):
         # [batch, in+s, height, width]
+        bs, _, height, width = x.size()
         if s is not None:
             x = torch.cat([x, s], dim=1)
-        # [batch, fh, fw, slice_heigth, slice_width, in+s]
+
+        # slice2d
+        # [batch*fh*fw, in+s, slice_heigth, slice_width]
         x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
-        # [batch, fh, fw, slice_heigth, slice_width, hidden]
-        x = self.linear1(x)
-        bs, fh, fw, sh, sw, hc = x.size()
-        # [batch*fh*fw, slice_heigth*slice_width, hidden]
-        x = x.view(bs * fh * fw, sh * sw, hc)
+        # [batch*fh*fw, hidden, slice_heigth, slice_width]
+        x = self.nin1(x)
         for attn in self.attns:
             x = attn(x, pos_enc=self.pos_enc)
 
         # unslice2d
-        # [batch, fh, fw, slice_heigth, slice_width, hidden] -> [batch, fh, slice_height, fw, slice_width, hidden]
-        x = x.view(bs, fh, fw, sh, sw, hc).transpose(2, 3)
-        # [batch, fh, slice_height, fw, slice_width, hidden]
-        x = self.activation(self.linear2(x))
-        # [batch, height, width, hidden] -> [batch, hidden, height, width]
-        x = x.view(bs, fh * sh, fw * sw, -1).permute(0, 3, 1, 2)
-
+        # [batch, hidden, height, width]
+        x = NICESelfAttnBlock.unslice2d(x, height, width)
+        # [batch, hidden, height, width]
+        x = self.activation(self.nin2(x))
         # compute output
-        out = self.conv1x1(x)
+        # [batch, out, height, width]
+        out = self.nin3(x)
         return out
 
     def init(self, x, s=None, init_scale=1.0):
         # [batch, in+s, height, width]
+        bs, _, height, width = x.size()
         if s is not None:
             x = torch.cat([x, s], dim=1)
-        # [batch, fh, fw, slice_heigth, slice_width, in+s]
+
+        # slice2d
+        # [batch*fh*fw, in+s, slice_heigth, slice_width]
         x = NICESelfAttnBlock.slice2d(x, self.slice_height, self.slice_width)
-        # [batch, fh, fw, slice_heigth, slice_width, hidden]
-        x = self.linear1.init(x, init_scale=init_scale)
-        bs, fh, fw, sh, sw, hc = x.size()
-        # [batch*fh*fw, slice_heigth*slice_width, hidden]
-        x = x.view(bs * fh * fw, sh * sw, hc)
+        # [batch*fh*fw, hidden, slice_heigth, slice_width]
+        x = self.nin1.init(x, init_scale=init_scale)
         for attn in self.attns:
             x = attn.init(x, pos_enc=self.pos_enc, init_scale=init_scale)
 
         # unslice2d
-        # [batch, fh, fw, slice_heigth, slice_width, hidden] -> [batch, fh, slice_height, fw, slice_width, hidden]
-        x = x.view(bs, fh, fw, sh, sw, hc).transpose(2, 3)
-        # [batch, fh, slice_height, fw, slice_width, hidden]
-        x = self.activation(self.linear2.init(x, init_scale=init_scale))
-        # [batch, height, width, hidden] -> [batch, hidden, height, width]
-        x = x.view(bs, fh * sh, fw * sw, -1).permute(0, 3, 1, 2)
-
+        # [batch, hidden, height, width]
+        x = NICESelfAttnBlock.unslice2d(x, height, width)
+        # [batch, hidden, height, width]
+        x = self.activation(self.nin2.init(x, init_scale=init_scale))
         # compute output
-        out = self.conv1x1.init(x, init_scale=0.0)
+        # [batch, out, height, width]
+        out = self.nin3.init(x, init_scale=0.0)
         return out
 
     @staticmethod
@@ -140,8 +136,25 @@ class NICESelfAttnBlock(nn.Module):
 
         # [batch, channels, height, width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.view(-1, n_channels, fh, slice_height, fw, slice_width)
-        # [batch, channels, factor_height, slice_height, factor_width, slice_width] -> [batch, factor_height, factor_width, slice_height, slice_width, channels]
-        x = x.permute(0, 2, 4, 3, 5, 1)
+        # [batch, channels, factor_height, slice_height, factor_width, slice_width] -> [batch, factor_height, factor_width, channels, slice_height, slice_width]
+        x = x.permute(0, 2, 4, 1, 3, 5).contiguous()
+        # [batch * factor_height * factor_width, channels, slice_height, slice_width]
+        x = x.view(-1, n_channels, height, width)
+        return x
+
+    @staticmethod
+    def unslice2d(x: torch.Tensor, height, width) -> torch.Tensor:
+        batch, n_channels, slice_height, slice_width = x.size()
+        assert height % slice_height == 0 and width % slice_width == 0
+        fh = height // slice_height
+        fw = width // slice_width
+
+        # [batch, factor_height, factor_width, channels, slice_height, slice_width]
+        x = x.view(-1, fh, fw, n_channels, slice_height, slice_width)
+        # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
+        x = x.permute(0, 3, 1, 4, 2, 5).contiguous()
+        # [batch, channels, height, width]
+        x = x.view(batch, n_channels, height, width)
         return x
 
 
