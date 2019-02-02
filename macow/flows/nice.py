@@ -45,11 +45,10 @@ class NICEConvBlock(nn.Module):
 
 
 class SelfAttnLayer(nn.Module):
-    def __init__(self, channels, heads, slice):
+    def __init__(self, channels, heads):
         super(SelfAttnLayer, self).__init__()
         self.attn = MultiHeadAttention2d(channels, heads)
-        self.gn = nn.LayerNorm([channels, *slice])
-        # self.gn = nn.GroupNorm(heads, channels)
+        self.gn = nn.GroupNorm(heads, channels)
 
     def forward(self, x, pos_enc=None):
         return self.gn(self.attn(x, pos_enc=pos_enc))
@@ -63,7 +62,7 @@ class NICESelfAttnBlock(nn.Module):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         num_layers = 2
-        attns = [SelfAttnLayer(hidden_channels, heads, slice) for _ in range(num_layers)]
+        attns = [SelfAttnLayer(hidden_channels, heads) for _ in range(num_layers)]
         self.attns = nn.ModuleList(attns)
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
