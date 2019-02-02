@@ -2,7 +2,7 @@
   "flow": {
     "type": "macow",
     "levels": 5,
-    "num_steps": [4, [16, 16], [16, 16], [12, 12], 12],
+    "num_steps": [4, [12, 12], [12, 12], [8, 8], 12],
     "factors": [4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
@@ -11,7 +11,7 @@
     "bottom": true,
     "coupling_type": "self_attn",
     "slices": [16, 16, 8, 4, 4],
-    "heads": 8,
+    "heads": 6,
     "train_pos_enc": false,
     "inverse": true
   },
