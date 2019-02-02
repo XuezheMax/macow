@@ -44,7 +44,7 @@ class MultiHeadAttention(nn.Module):
         # [batch, timesteps, heads, dim] -> [batch, timesteps, features]
         out = out.transpose(1, 2).contiguous().view(bs, timesteps, features)
         out1, out2 = self.proj2(out).chunk(2, dim=2)
-        out = gate(out1, out2) + x
+        out = gate(out1, out2).add_(x)
         return out
 
     def init(self, x, pos_enc=None, init_scale=1.0):
@@ -72,7 +72,7 @@ class MultiHeadAttention(nn.Module):
         # [batch, timesteps, heads, dim] -> [batch, timesteps, features]
         out = out.transpose(1, 2).contiguous().view(bs, timesteps, features)
         out1, out2 = self.proj2.init(out, init_scale=0.1 * init_scale).chunk(2, dim=2)
-        out = gate(out1, out2) + x
+        out = gate(out1, out2).add_(x)
         return out
 
 
@@ -113,7 +113,7 @@ class MultiHeadAttention2d(nn.Module):
         # [batch, 2 * channels, heads, dim]
         out = self.proj2(out.view(bs, channels, height, width))
         out1, out2 = out.chunk(2, dim=1)
-        out = gate(out1, out2) + x
+        out = gate(out1, out2).add_(x)
         return out
 
     def init(self, x, pos_enc=None, init_scale=1.0):
@@ -142,5 +142,5 @@ class MultiHeadAttention2d(nn.Module):
         # [batch, 2 * channels, heads, dim]
         out = self.proj2.init(out.view(bs, channels, height, width), init_scale=0.1 * init_scale)
         out1, out2 = out.chunk(2, dim=1)
-        out = gate(out1, out2) + x
+        out = gate(out1, out2).add_(x)
         return out
