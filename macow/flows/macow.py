@@ -299,8 +299,7 @@ class MaCow(Flow):
             slice = slices[level]
             h_channels = hidden_channels[level]
             if level == 0 and bottom:
-                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, h_channels, s_channels,
-                                               scale=scale, inverse=inverse, coupling_type=coupling_type, slice=slice, train_pos_enc=train_pos_enc)
+                macow_block = MaCowBottomBlock(num_steps[level], in_channels, kernel_size, h_channels, s_channels, scale=scale, inverse=inverse)
                 blocks.append(macow_block)
             elif level == levels - 1:
                 in_channels = in_channels * 4
