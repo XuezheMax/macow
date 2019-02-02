@@ -144,7 +144,7 @@ class NICESelfAttnBlock(nn.Module):
 
     @staticmethod
     def unslice2d(x: torch.Tensor, height, width) -> torch.Tensor:
-        batch, n_channels, slice_height, slice_width = x.size()
+        _, n_channels, slice_height, slice_width = x.size()
         assert height % slice_height == 0 and width % slice_width == 0
         fh = height // slice_height
         fw = width // slice_width
@@ -154,7 +154,7 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.permute(0, 3, 1, 4, 2, 5).contiguous()
         # [batch, channels, height, width]
-        x = x.view(batch, n_channels, height, width)
+        x = x.view(-1, n_channels, height, width)
         return x
 
 
