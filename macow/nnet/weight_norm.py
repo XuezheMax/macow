@@ -35,7 +35,7 @@ class NIN2d(nn.Module):
 
     def forward(self, input):
         weight = self.compute_weight()
-        out = torch.einsum('...cij,oc->...oij', input, weight)
+        out = torch.einsum('...cij,oc->...oij', (input, weight))
         if self.bias is not None:
             out = out + self.bias
         return out
@@ -91,7 +91,7 @@ class NIN4d(nn.Module):
 
     def forward(self, input):
         weight = self.compute_weight()
-        out = torch.einsum('bc...,oc->bo...', input, weight)
+        out = torch.einsum('bc...,oc->bo...', (input, weight))
         if self.bias is not None:
             out = out + self.bias
         return out

@@ -99,11 +99,11 @@ class MultiHeadAttention2d(nn.Module):
         # [batch, heads, dim, timesteps]
         values = c[:, 2].view(bs, heads, dim, height * width)
         # attention weights [batch, heads, height, width, height, width]
-        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', queries, keys).div(math.sqrt(dim))
+        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', (queries, keys)).div(math.sqrt(dim))
         # attention weights [batch, heads, height, width, timesteps]
         attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
         # values [batch, heads, dim, height, width]
-        out = torch.einsum('bhdt,bhijt->bhdij', values, attn_weights)
+        out = torch.einsum('bhdt,bhijt->bhdij', (values, attn_weights))
         # merge heads
         # [batch, channels, heads, dim]
         out = x + out.view(bs, channels, height, width)
@@ -126,11 +126,11 @@ class MultiHeadAttention2d(nn.Module):
         # [batch, heads, dim, timesteps]
         values = c[:, 2].view(bs, heads, dim, height * width)
         # attention weights [batch, heads, height, width, height, width]
-        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', queries, keys).div(math.sqrt(dim))
+        attn_weights = torch.einsum('bhdij,bhdkl->bhijkl', (queries, keys)).div(math.sqrt(dim))
         # attention weights [batch, heads, height, width, timesteps]
         attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
         # values [batch, heads, dim, height, width]
-        out = torch.einsum('bhdt,bhijt->bhdij', values, attn_weights)
+        out = torch.einsum('bhdt,bhijt->bhdij', (values, attn_weights))
         # merge heads
         # [batch, channels, heads, dim]
         out = x + out.view(bs, channels, height, width)
