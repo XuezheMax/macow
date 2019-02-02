@@ -47,10 +47,11 @@ class NIN2d(nn.Module):
 
     def init(self, x, init_scale=1.0):
         with torch.no_grad():
-            out_features, height, width = x.size()[-3:]
+            out = self(x)
+            out_features, height, width = out.size()[-3:]
             assert out_features == self.out_features
             # [batch, out_features, h * w] - > [batch, h * w, out_features]
-            out = self(x).view(-1, out_features, height * width).transpose(1, 2)
+            out = out.view(-1, out_features, height * width).transpose(1, 2)
             # [batch*height*width, out_features]
             out = out.contiguous().view(-1, out_features)
             # [out_features]
@@ -102,10 +103,11 @@ class NIN4d(nn.Module):
 
     def init(self, x, init_scale=1.0):
         with torch.no_grad():
-            batch, out_features = x.size()[:2]
+            out = self(x)
+            batch, out_features = out.size()[:2]
             assert out_features == self.out_features
             # [batch, out_features, h * w] - > [batch, h * w, out_features]
-            out = self(x).view(batch, out_features, -1).transpose(1, 2)
+            out = out.view(batch, out_features, -1).transpose(1, 2)
             # [batch*height*width, out_features]
             out = out.contiguous().view(-1, out_features)
             # [out_features]
