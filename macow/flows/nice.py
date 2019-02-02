@@ -139,7 +139,7 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, channels, factor_height, slice_height, factor_width, slice_width] -> [batch, factor_height, factor_width, channels, slice_height, slice_width]
         x = x.permute(0, 2, 4, 1, 3, 5).contiguous()
         # [batch * factor_height * factor_width, channels, slice_height, slice_width]
-        x = x.view(-1, n_channels, height, width)
+        x = x.view(-1, n_channels, slice_height, slice_width)
         return x
 
     @staticmethod
