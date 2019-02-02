@@ -59,7 +59,7 @@ class SelfAttnLayer(nn.Module):
 
 
 class NICESelfAttnBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, train_pos_enc=True):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, train_pos_enc=False):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         num_layers = 2
@@ -157,7 +157,7 @@ class NICESelfAttnBlock(nn.Module):
 
 class NICE(Flow):
     def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2,
-                 type='conv', slice=None, heads=1, train_pos_enc=True):
+                 type='conv', slice=None, heads=1, train_pos_enc=False):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale

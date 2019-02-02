@@ -16,7 +16,7 @@ class GlowStep(Flow):
     """
     A step of Glow. A Conv1x1 followed with a NICE
     """
-    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=True):
+    def __init__(self, in_channels, hidden_channels=512, s_channels=0, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=False):
         super(GlowStep, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)

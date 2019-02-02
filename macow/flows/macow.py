@@ -67,7 +67,7 @@ class MaCowStep(Flow):
     """
     A step of Macow Flows with 4 Macow Unit and a Glow step
     """
-    def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=True):
+    def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=False):
         super(MaCowStep, self).__init__(inverse)
         num_units = 4
         units = [MaCowUnit(in_channels, kernel_size, s_channels, scale=scale, inverse=inverse) for _ in range(num_units)]
@@ -150,7 +150,7 @@ class MaCowTopBlock(Flow):
     Masked Convolutional Flow Block (squeeze at beginning)
     """
     def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels,
-                 scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=True):
+                 scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=False):
         super(MaCowTopBlock, self).__init__(inverse)
         steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
                            coupling_type=coupling_type, slice=slice, heads=heads, train_pos_enc=train_pos_enc) for _ in range(num_steps)]
@@ -191,7 +191,7 @@ class MaCowInternalBlock(Flow):
     Masked Convolution Flow Internal Block (squeeze at beginning and split at end)
     """
     def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels,
-                 factor=2, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=True):
+                 factor=2, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, train_pos_enc=False):
         super(MaCowInternalBlock, self).__init__(inverse)
         num_layers = len(num_steps)
         assert num_layers < factor
@@ -282,7 +282,7 @@ class MaCow(Flow):
     Masked Convolutional Flow
     """
     def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels, s_channels=0,
-                 scale=True, inverse=False, bottom=True, coupling_type='conv', slices=None, heads=1, train_pos_enc=True):
+                 scale=True, inverse=False, bottom=True, coupling_type='conv', slices=None, heads=1, train_pos_enc=False):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert levels == len(num_steps)

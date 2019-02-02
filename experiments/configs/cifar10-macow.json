@@ -12,7 +12,7 @@
     "coupling_type": "self_attn",
     "slices": [8, 8, 4, 4],
     "heads": 8,
-    "train_pos_enc": true,
+    "train_pos_enc": false,
     "inverse": true
   },
   "ngpu": 2,
