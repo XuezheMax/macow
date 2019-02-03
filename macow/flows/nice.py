@@ -59,7 +59,7 @@ class SelfAttnLayer(nn.Module):
 
 
 class NICESelfAttnBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, train_pos_enc=False):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, pos_enc=True):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         self.attn = SelfAttnLayer(hidden_channels, heads)
@@ -68,15 +68,18 @@ class NICESelfAttnBlock(nn.Module):
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
-        pos_enc = np.array([[[(h * self.slice_width + w) / np.power(10000, 2.0 * (i // 2) / hidden_channels)
-                              for i in range(hidden_channels)]
-                             for w in range(self.slice_width)]
-                            for h in range(self.slice_height)])
-        pos_enc[:, :, 0::2] = np.sin(pos_enc[:, :, 0::2])
-        pos_enc[:, :, 1::2] = np.cos(pos_enc[:, :, 1::2])
-        pos_enc = np.transpose(pos_enc, (2, 0, 1))
-        pos_enc = torch.from_numpy(pos_enc).float()
-        self.pos_enc = Parameter(pos_enc, requires_grad=train_pos_enc)
+        if pos_enc:
+            self.register_buffer('pos_enc', torch.zeros(hidden_channels, self.slice_height, self.slice_width))
+            pos_enc = np.array([[[(h * self.slice_width + w) / np.power(10000, 2.0 * (i // 2) / hidden_channels)
+                                  for i in range(hidden_channels)]
+                                 for w in range(self.slice_width)]
+                                for h in range(self.slice_height)])
+            pos_enc[:, :, 0::2] = np.sin(pos_enc[:, :, 0::2])
+            pos_enc[:, :, 1::2] = np.cos(pos_enc[:, :, 1::2])
+            pos_enc = np.transpose(pos_enc, (2, 0, 1))
+            self.pos_enc.copy_(torch.from_numpy(pos_enc).float())
+        else:
+            self.register_buffer('pos_enc', None)
 
     def forward(self, x, s=None):
         # [batch, in+s, height, width]
@@ -153,7 +156,7 @@ class NICESelfAttnBlock(nn.Module):
 
 class NICE(Flow):
     def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2,
-                 type='conv', slice=None, heads=1, train_pos_enc=False):
+                 type='conv', slice=None, heads=1, pos_enc=True):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
@@ -172,7 +175,7 @@ class NICE(Flow):
         else:
             assert slice is not None, 'slice should be given.'
             slice = _pair(slice)
-            self.net = NICESelfAttnBlock(in_channels, out_channels, hidden_channels, s_channels, slice=slice, heads=heads, train_pos_enc=train_pos_enc)
+            self.net = NICESelfAttnBlock(in_channels, out_channels, hidden_channels, s_channels, slice=slice, heads=heads, pos_enc=pos_enc)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)
