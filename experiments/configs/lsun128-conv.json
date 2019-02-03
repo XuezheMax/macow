@@ -2,13 +2,14 @@
   "flow": {
     "type": "macow",
     "levels": 6,
-    "num_steps": [4, [24, 24], [24, 24], [16, 16], [16, 16], 4],
+    "num_steps": [4, [24, 24], [16, 16], [16, 16], [8, 8], 4],
     "factors": [4, 4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
-    "scale": true,
-    "hidden_channels": 256,
+    "scale": false,
+    "hidden_channels": [24, 256, 256, 256, 256, 512],
     "bottom": true,
+    "coupling_type": "conv",
     "inverse": true
   },
   "ngpu": 2,

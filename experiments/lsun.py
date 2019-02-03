@@ -80,7 +80,7 @@ np.random.shuffle(train_index)
 test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-test_loader = DataLoader(test_data, batch_size=300, shuffle=False, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=100, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
 
 print(len(train_index))
@@ -293,7 +293,7 @@ else:
     # initialize
     fgen.eval()
     init_batch_size = 512 if imageSize == 64 else 128
-    init_iter = 1 if imageSize == 64 else 4
+    init_iter = 1
     print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
     for _ in range(init_iter):
         init_index = np.random.choice(train_index, init_batch_size, replace=False)
