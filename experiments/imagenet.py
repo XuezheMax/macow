@@ -206,7 +206,7 @@ def eval(data_loader, k):
 def reconstruct(epoch):
     print('reconstruct')
     fgen.eval()
-    n = 64
+    n = 16
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
     img = preprocess(img.to(device), n_bits)
@@ -291,7 +291,7 @@ else:
         raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
     fgen.eval()
-    init_batch_size = 2048 if imageSize == 32 else 512
+    init_batch_size = 1024 if imageSize == 32 else 256
     init_iter = 1
     print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
     for _ in range(init_iter):
