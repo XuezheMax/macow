@@ -10,7 +10,7 @@
     "hidden_channels": [24, 384, 384, 384],
     "bottom": true,
     "coupling_type": "self_attn",
-    "slices": [8, 8, 8, 4],
+    "slices": [16, 8, 8, 4],
     "heads": 6,
     "train_pos_enc": false,
     "inverse": true
