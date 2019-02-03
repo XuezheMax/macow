@@ -6,7 +6,7 @@
     "factors": [4, 4, 4, 4],
     "in_channels": 3,
     "kernel_size": 3,
-    "scale": false,
+    "scale": true,
     "hidden_channels": [24, 256, 256, 256, 256, 512],
     "bottom": true,
     "coupling_type": "conv",
