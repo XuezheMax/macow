@@ -207,10 +207,10 @@ def eval(data_loader, k):
 def reconstruct(epoch):
     print('reconstruct')
     fgen.eval()
-    n = 64
+    n = 16
     np.random.shuffle(test_index)
     img, _ = get_batch(test_data, test_index[:n])
-    img = preprocess(img.to(device), n_bits, 0)
+    img = preprocess(img.to(device), n_bits)
 
     z, _ = fgen.encode(img)
     img_recon, _ = fgen.decode(z)
@@ -230,7 +230,7 @@ def reconstruct(epoch):
 def sample(epoch):
     print('sampling')
     fgen.eval()
-    n = 256
+    n = 256 if imageSize == 64 else 128
     taus = [0.7, 0.8, 0.9, 1.0]
     for t in taus:
         z = torch.randn(n, 3, imageSize, imageSize).to(device)
