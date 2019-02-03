@@ -7,11 +7,11 @@
     "in_channels": 3,
     "kernel_size": 3,
     "scale": true,
-    "hidden_channels": [24, 256, 256, 256],
+    "hidden_channels": [24, 384, 384, 384],
     "bottom": true,
     "coupling_type": "self_attn",
     "slices": [8, 8, 8, 4],
-    "heads": 8,
+    "heads": 6,
     "train_pos_enc": false,
     "inverse": true
   },
