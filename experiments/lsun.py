@@ -230,7 +230,7 @@ def reconstruct(epoch):
 def sample(epoch):
     print('sampling')
     fgen.eval()
-    n = 256 if imageSize == 64 else 128
+    n = 256
     taus = [0.7, 0.8, 0.9, 1.0]
     for t in taus:
         z = torch.randn(n, 3, imageSize, imageSize).to(device)
@@ -292,7 +292,7 @@ else:
         raise ValueError('unknown dequantization method: %s' % dequant)
     # initialize
     fgen.eval()
-    init_batch_size = 512 if imageSize == 64 else 128
+    init_batch_size = 512
     init_iter = 1
     print('init: {} instances with {} iterations'.format(init_batch_size, init_iter))
     for _ in range(init_iter):
