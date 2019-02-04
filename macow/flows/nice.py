@@ -46,9 +46,9 @@ class NICEConvBlock(nn.Module):
 
 
 class SelfAttnLayer(nn.Module):
-    def __init__(self, channels, heads):
+    def __init__(self, channels, heads, dropout=0.0):
         super(SelfAttnLayer, self).__init__()
-        self.attn = MultiHeadAttention2d(channels, heads)
+        self.attn = MultiHeadAttention2d(channels, heads, dropout=dropout)
         self.gn = nn.GroupNorm(heads, channels)
 
     def forward(self, x, pos_enc=None):
@@ -59,10 +59,10 @@ class SelfAttnLayer(nn.Module):
 
 
 class NICESelfAttnBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, pos_enc=True):
+    def __init__(self, in_channels, out_channels, hidden_channels, s_channels, slice, heads, pos_enc=True, dropout=0.0):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
-        self.attn = SelfAttnLayer(hidden_channels, heads)
+        self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
@@ -156,7 +156,7 @@ class NICESelfAttnBlock(nn.Module):
 
 class NICE(Flow):
     def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2,
-                 type='conv', slice=None, heads=1, pos_enc=True):
+                 type='conv', slice=None, heads=1, pos_enc=True, dropout=0.0):
         super(NICE, self).__init__(inverse)
         self.in_channels = in_channels
         self.scale = scale
@@ -175,7 +175,8 @@ class NICE(Flow):
         else:
             assert slice is not None, 'slice should be given.'
             slice = _pair(slice)
-            self.net = NICESelfAttnBlock(in_channels, out_channels, hidden_channels, s_channels, slice=slice, heads=heads, pos_enc=pos_enc)
+            self.net = NICESelfAttnBlock(in_channels, out_channels, hidden_channels, s_channels,
+                                         slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout)
 
     def calc_mu_and_scale(self, z1: torch.Tensor, s=None):
         mu = self.net(z1, s=s)

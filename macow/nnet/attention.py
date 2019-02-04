@@ -8,10 +8,14 @@ from macow.nnet.weight_norm import LinearWeightNorm, Conv2dWeightNorm
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, features, heads):
+    def __init__(self, features, heads, dropout=0.0):
         super(MultiHeadAttention, self).__init__()
         self.proj = LinearWeightNorm(features, 3 * features, bias=True)
         self.softmax = nn.Softmax(dim=-1)
+        if dropout > 0.:
+            self.dropout = nn.Dropout(dropout, inplace=True)
+        else:
+            self.dropout = None
         assert features % heads == 0
         self.features = features
         self.heads = heads
@@ -38,6 +42,8 @@ class MultiHeadAttention(nn.Module):
         attn_weights = self.softmax(attn_weights)
         # values [batch, heads, timesteps, dim]
         out = torch.matmul(attn_weights, values)
+        if self.dropout is not None:
+            out = self.dropout(out)
         # merge heads
         # [batch, timesteps, heads, dim]
         out = x.view(bs, timesteps, heads, dim) + out.transpose(1, 2)
@@ -65,6 +71,8 @@ class MultiHeadAttention(nn.Module):
         attn_weights = self.softmax(attn_weights)
         # values [batch, heads, timesteps, dim]
         out = torch.matmul(attn_weights, values)
+        if self.dropout is not None:
+            out = self.dropout(out)
         # merge heads
         # [batch, timesteps, heads, dim]
         out = x.view(bs, timesteps, heads, dim) + out.transpose(1, 2)
@@ -73,10 +81,14 @@ class MultiHeadAttention(nn.Module):
 
 
 class MultiHeadAttention2d(nn.Module):
-    def __init__(self, channels, heads):
+    def __init__(self, channels, heads, dropout=0.0):
         super(MultiHeadAttention2d, self).__init__()
         self.proj = Conv2dWeightNorm(channels, 3 * channels, 1, bias=True)
         self.softmax = nn.Softmax(dim=-1)
+        if dropout > 0.:
+            self.dropout = nn.Dropout(dropout, inplace=True)
+        else:
+            self.dropout = None
         assert channels % heads == 0
         self.features = channels
         self.heads = heads
@@ -104,6 +116,8 @@ class MultiHeadAttention2d(nn.Module):
         attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
         # values [batch, heads, dim, height, width]
         out = torch.einsum('bhdt,bhijt->bhdij', (values, attn_weights))
+        if self.dropout is not None:
+            out = self.dropout(out)
         # merge heads
         # [batch, channels, heads, dim]
         out = x + out.view(bs, channels, height, width)
@@ -131,6 +145,8 @@ class MultiHeadAttention2d(nn.Module):
         attn_weights = self.softmax(attn_weights.view(bs, heads, height, width, -1))
         # values [batch, heads, dim, height, width]
         out = torch.einsum('bhdt,bhijt->bhdij', (values, attn_weights))
+        if self.dropout is not None:
+            out = self.dropout(out)
         # merge heads
         # [batch, channels, heads, dim]
         out = x + out.view(bs, channels, height, width)
