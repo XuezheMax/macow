@@ -5,11 +5,10 @@ from typing import Tuple, Dict
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn import Parameter
 from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
-from macow.nnet.weight_norm import Conv2dWeightNorm, NIN2d, NIN4d
+from macow.nnet.weight_norm import Conv2dWeightNorm, NIN2d
 from macow.nnet.attention import MultiHeadAttention2d
 
 
@@ -63,7 +62,7 @@ class NICESelfAttnBlock(nn.Module):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
-        self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
+        self.nin2 = NIN2d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
@@ -144,11 +143,12 @@ class NICESelfAttnBlock(nn.Module):
 
         # [batch, factor_height, factor_width, channels, slice_height, slice_width]
         x = x.view(-1, fh, fw, n_channels, slice_height, slice_width)
+        c = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
+        c = self.activation(c)
         # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.permute(0, 3, 1, 4, 2, 5)
-        # [batch, channels, factor_height, slice_height, factor_width, slice_width]
-        c = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
-        x = self.activation(c) + x
+        c = c.permute(0, 3, 1, 4, 2, 5)
+        x = c + x
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
         return x

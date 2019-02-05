@@ -13,6 +13,7 @@
     "slices": [16, 16, 8, 8, 4],
     "heads": 8,
     "pos_enc": true,
+    "dropout": 0.0,
     "inverse": true
   },
   "ngpu": 2,
