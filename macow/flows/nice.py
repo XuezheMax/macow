@@ -63,7 +63,7 @@ class NICESelfAttnBlock(nn.Module):
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
         self.nin2 = NIN2d(hidden_channels, hidden_channels, bias=True)
-        self.activation = nn.ELU(inplace=True)
+        self.activation = nn.ReLU(inplace=True)
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
