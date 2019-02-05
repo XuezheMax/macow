@@ -148,7 +148,7 @@ class NICESelfAttnBlock(nn.Module):
         x = x.permute(0, 3, 1, 4, 2, 5)
         # [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
-        x = self.activation(x)
+        x = self.activation(x) + x
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
         return x
