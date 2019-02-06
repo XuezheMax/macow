@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.nn.modules.utils import _pair
 
 from macow.flows.flow import Flow
-from macow.nnet.weight_norm import Conv2dWeightNorm, NIN2d
+from macow.nnet.weight_norm import Conv2dWeightNorm, NIN2d, NIN4d
 from macow.nnet.attention import MultiHeadAttention2d
 
 
@@ -62,8 +62,12 @@ class NICESelfAttnBlock(nn.Module):
         super(NICESelfAttnBlock, self).__init__()
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
-        self.nin2 = NIN2d(hidden_channels, hidden_channels, bias=True)
+        self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
+        if dropout > 0.:
+            self.dropout = nn.Dropout(dropout, inplace=True)
+        else:
+            self.dropout = None
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
@@ -143,11 +147,13 @@ class NICESelfAttnBlock(nn.Module):
 
         # [batch, factor_height, factor_width, channels, slice_height, slice_width]
         x = x.view(-1, fh, fw, n_channels, slice_height, slice_width)
-        c = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
-        c = self.activation(c)
         # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.permute(0, 3, 1, 4, 2, 5)
-        c = c.permute(0, 3, 1, 4, 2, 5)
+        # [batch, channels, factor_height, slice_height, factor_width, slice_width]
+        c = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
+        c = self.activation(c)
+        if self.dropout is not None:
+            c = self.dropout(c)
         x = c + x
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
@@ -197,17 +203,14 @@ class NICE(Flow):
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         # [batch, in_channels, H, W]
         z1 = input[:, :self.z1_channels]
@@ -224,17 +227,14 @@ class NICE(Flow):
     @overrides
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
-
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-
         """
         z1 = input[:, :self.z1_channels]
         z2 = input[:, self.z1_channels:]
