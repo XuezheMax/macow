@@ -65,7 +65,7 @@ class NICESelfAttnBlock(nn.Module):
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
         if dropout > 0.:
-            self.dropout = nn.Dropout(dropout, inplace=True)
+            self.dropout = nn.Dropout(dropout)
         else:
             self.dropout = None
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
@@ -150,11 +150,10 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, factor_height, factor_width, channels, slice_height, slice_width] -> [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = x.permute(0, 3, 1, 4, 2, 5)
         # [batch, channels, factor_height, slice_height, factor_width, slice_width]
-        c = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
-        c = self.activation(c)
+        x = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
+        x = self.activation(x)
         if self.dropout is not None:
-            c = self.dropout(c)
-        x = c + x
+            x = self.dropout(x)
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
         return x
