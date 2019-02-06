@@ -63,7 +63,7 @@ class NICESelfAttnBlock(nn.Module):
         self.nin1 = NIN2d(in_channels + s_channels, hidden_channels, bias=True)
         self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
-        self.activation = nn.ELU(inplace=True)
+        self.activation = nn.ReLU(inplace=True)
         if dropout > 0.:
             self.dropout = nn.Dropout(dropout)
         else:
