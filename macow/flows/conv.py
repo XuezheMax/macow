@@ -156,7 +156,7 @@ class MCFBlock(nn.Module):
         super(MCFBlock, self).__init__()
         self.masked_conv = MaskedConv2d(in_channels, hidden_channels, kernel_size, order=order)
         self.conv1x1 = Conv2dWeightNorm(hidden_channels, out_channels, kernel_size=1, bias=True)
-        self.activation = nn.ReLU(inplace=True)
+        self.activation = nn.ELU(inplace=True)
         self.padding = self.masked_conv.padding
 
     def forward(self, x, s=None):
