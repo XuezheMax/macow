@@ -64,10 +64,6 @@ class NICESelfAttnBlock(nn.Module):
         self.attn = SelfAttnLayer(hidden_channels, heads, dropout=dropout)
         self.nin2 = NIN4d(hidden_channels, hidden_channels, bias=True)
         self.activation = nn.ELU(inplace=True)
-        if dropout > 0.:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = None
         self.nin3 = NIN2d(hidden_channels, out_channels, bias=True)
         self.slice_height, self.slice_width = slice
         # positional enc
@@ -152,8 +148,6 @@ class NICESelfAttnBlock(nn.Module):
         # [batch, channels, factor_height, slice_height, factor_width, slice_width]
         x = self.nin2.init(x, init_scale=init_scale) if init else self.nin2(x)
         x = self.activation(x)
-        if self.dropout is not None:
-            x = self.dropout(x)
         # [batch, channels, height, width]
         x = x.view(-1, n_channels, height, width)
         return x
