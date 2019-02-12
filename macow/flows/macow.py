@@ -20,8 +20,10 @@ class MaCowUnit(Flow):
     def __init__(self, in_channels, kernel_size, s_channels, scale=True, inverse=False):
         super(MaCowUnit, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
-        self.conv1 = MaskedConvFlow(in_channels, kernel_size, s_channels=s_channels, order='A', scale=scale, inverse=inverse)
-        self.conv2 = MaskedConvFlow(in_channels, kernel_size, s_channels=s_channels, order='B', scale=scale, inverse=inverse)
+        self.conv1 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='A', scale=scale, inverse=inverse)
+        self.conv2 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='B', scale=scale, inverse=inverse)
+        self.conv3 = MaskedConvFlow(in_channels, (kernel_size, kernel_size - 1), s_channels=s_channels, order='C', scale=scale, inverse=inverse)
+        self.conv4 = MaskedConvFlow(in_channels, (kernel_size, kernel_size - 1), s_channels=s_channels, order='D', scale=scale, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -33,11 +35,23 @@ class MaCowUnit(Flow):
         # MCF2
         out, logdet = self.conv2.forward(out, s=s)
         logdet_accum = logdet_accum + logdet
+        # MCF3
+        out, logdet = self.conv3.forward(out, s=s)
+        logdet_accum = logdet_accum + logdet
+        # MCF4
+        out, logdet = self.conv4.forward(out, s=s)
+        logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
+        # MCF4
+        out, logdet_accum = self.conv4.backward(input, s=s)
+        # MCF3
+        out, logdet = self.conv3.backward(out, s=s)
+        logdet_accum = logdet_accum + logdet
         # MCF2
-        out, logdet_accum = self.conv2.backward(input, s=s)
+        out, logdet = self.conv2.backward(out, s=s)
+        logdet_accum = logdet_accum + logdet
         # MCF1
         out, logdet = self.conv1.backward(out, s=s)
         logdet_accum = logdet_accum + logdet
@@ -56,6 +70,12 @@ class MaCowUnit(Flow):
         # MCF2
         out, logdet = self.conv2.init(out, s=s, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
+        # MCF3
+        out, logdet = self.conv3.init(out, s=s, init_scale=init_scale)
+        logdet_accum = logdet_accum + logdet
+        # MCF4
+        out, logdet = self.conv4.init(out, s=s, init_scale=init_scale)
+        logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @classmethod
@@ -70,7 +90,7 @@ class MaCowStep(Flow):
     def __init__(self, in_channels, kernel_size, hidden_channels, s_channels, scale=True, inverse=False,
                  coupling_type='conv', slice=None, heads=1, pos_enc=True, dropout=0.0):
         super(MaCowStep, self).__init__(inverse)
-        num_units = 4
+        num_units = 2
         units = [MaCowUnit(in_channels, kernel_size, s_channels, scale=scale, inverse=inverse) for _ in range(num_units)]
         self.units = nn.ModuleList(units)
         self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse,
