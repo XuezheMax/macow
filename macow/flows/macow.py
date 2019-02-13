@@ -19,7 +19,8 @@ class MaCowUnit(Flow):
     """
     def __init__(self, in_channels, kernel_size, s_channels, scale=True, inverse=False):
         super(MaCowUnit, self).__init__(inverse)
-        self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
+        self.actnorm1 = ActNorm2dFlow(in_channels, inverse=inverse)
+        self.actnorm2 = ActNorm2dFlow(in_channels, inverse=inverse)
         self.conv1 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='A', scale=scale, inverse=inverse)
         self.conv2 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='B', scale=scale, inverse=inverse)
         self.conv3 = MaskedConvFlow(in_channels, (kernel_size, kernel_size - 1), s_channels=s_channels, order='C', scale=scale, inverse=inverse)
@@ -27,13 +28,16 @@ class MaCowUnit(Flow):
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        # ActNorm
-        out, logdet_accum = self.actnorm.forward(input)
+        # ActNorm1
+        out, logdet_accum = self.actnorm1.forward(input)
         # MCF1
         out, logdet = self.conv1.forward(out, s=s)
         logdet_accum = logdet_accum + logdet
         # MCF2
         out, logdet = self.conv2.forward(out, s=s)
+        logdet_accum = logdet_accum + logdet
+        # ActNorm2
+        out, logdet = self.actnorm2.forward(out)
         logdet_accum = logdet_accum + logdet
         # MCF3
         out, logdet = self.conv3.forward(out, s=s)
@@ -49,26 +53,32 @@ class MaCowUnit(Flow):
         # MCF3
         out, logdet = self.conv3.backward(out, s=s)
         logdet_accum = logdet_accum + logdet
+        # ActNorm2
+        out, logdet = self.actnorm2.backward(out)
+        logdet_accum = logdet_accum + logdet
         # MCF2
         out, logdet = self.conv2.backward(out, s=s)
         logdet_accum = logdet_accum + logdet
         # MCF1
         out, logdet = self.conv1.backward(out, s=s)
         logdet_accum = logdet_accum + logdet
-        # ActNorm
-        out, logdet = self.actnorm.backward(out)
+        # ActNorm1
+        out, logdet = self.actnorm1.backward(out)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     @overrides
     def init(self, data, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        # ActNorm
-        out, logdet_accum = self.actnorm.init(data, init_scale=init_scale)
+        # ActNorm1
+        out, logdet_accum = self.actnorm1.init(data, init_scale=init_scale)
         # MCF1
         out, logdet = self.conv1.init(out, s=s, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         # MCF2
         out, logdet = self.conv2.init(out, s=s, init_scale=init_scale)
+        logdet_accum = logdet_accum + logdet
+        # ActNorm2
+        out, logdet = self.actnorm2.init(out, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         # MCF3
         out, logdet = self.conv3.init(out, s=s, init_scale=init_scale)
