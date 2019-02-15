@@ -21,10 +21,10 @@ class MaCowUnit(Flow):
         super(MaCowUnit, self).__init__(inverse)
         self.actnorm1 = ActNorm2dFlow(in_channels, inverse=inverse)
         self.actnorm2 = ActNorm2dFlow(in_channels, inverse=inverse)
-        self.conv1 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='A', scale=scale, inverse=inverse)
-        self.conv2 = MaskedConvFlow(in_channels, (kernel_size - 1, kernel_size), s_channels=s_channels, order='B', scale=scale, inverse=inverse)
-        self.conv3 = MaskedConvFlow(in_channels, (kernel_size, kernel_size - 1), s_channels=s_channels, order='C', scale=scale, inverse=inverse)
-        self.conv4 = MaskedConvFlow(in_channels, (kernel_size, kernel_size - 1), s_channels=s_channels, order='D', scale=scale, inverse=inverse)
+        self.conv1 = MaskedConvFlow(in_channels, (kernel_size[0], kernel_size[1]), s_channels=s_channels, order='A', scale=scale, inverse=inverse)
+        self.conv2 = MaskedConvFlow(in_channels, (kernel_size[0], kernel_size[1]), s_channels=s_channels, order='B', scale=scale, inverse=inverse)
+        self.conv3 = MaskedConvFlow(in_channels, (kernel_size[1], kernel_size[0]), s_channels=s_channels, order='C', scale=scale, inverse=inverse)
+        self.conv4 = MaskedConvFlow(in_channels, (kernel_size[1], kernel_size[0]), s_channels=s_channels, order='D', scale=scale, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -316,6 +316,7 @@ class MaCow(Flow):
                  scale=True, inverse=False, bottom=True, coupling_type='conv', slices=None, heads=1, pos_enc=True, dropout=0.0):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
+        assert len(kernel_size) == 2, 'kernel size should contain two numbers'
         assert levels == len(num_steps)
         factors = [0] + factors + [0] if bottom else factors + [0]
         if slices is None:
