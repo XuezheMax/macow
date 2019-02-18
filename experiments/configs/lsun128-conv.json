@@ -5,7 +5,7 @@
     "num_steps": [4, [20, 20], [16, 16], [16, 16], [8, 8], 4],
     "factors": [4, 4, 4, 4],
     "in_channels": 3,
-    "kernel_size": [2, 3],
+    "kernel_size": [2, 5],
     "scale": false,
     "hidden_channels": [24, 256, 256, 256, 256, 512],
     "bottom": true,
