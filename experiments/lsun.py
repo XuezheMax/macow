@@ -344,8 +344,14 @@ for epoch in range(start_epoch, args.epochs + 1):
         best_nepd = nepd
 
         with torch.no_grad():
-            reconstruct(epoch)
-            sample(epoch)
+            try:
+                reconstruct(epoch)
+            except RuntimeError:
+                print('reconstruction failed.')
+            try:
+                sample(epoch)
+            except RuntimeError:
+                print('sampling failed.')
     else:
         patient += 1
 
