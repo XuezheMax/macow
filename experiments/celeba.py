@@ -59,7 +59,7 @@ nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
 n_bins = 2. ** n_bits
-test_k = 4
+test_k = 5
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
@@ -78,7 +78,7 @@ np.random.shuffle(train_index)
 test_index = np.arange(len(test_data))
 
 train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.workers, pin_memory=True)
-test_loader = DataLoader(test_data, batch_size=10, shuffle=False, num_workers=args.workers, pin_memory=True)
+test_loader = DataLoader(test_data, batch_size=12, shuffle=False, num_workers=args.workers, pin_memory=True)
 batch_steps = args.batch_steps
 
 print(len(train_index))
@@ -222,13 +222,13 @@ def reconstruct(epoch):
     reorder_index = torch.from_numpy(np.array([[i + j * n for j in range(2)] for i in range(n)])).view(-1)
     comparison = comparison[reorder_index]
     image_file = 'reconstruct{}.png'.format(epoch)
-    save_image(comparison, os.path.join(result_path, image_file), nrow=4)
+    save_image(comparison, os.path.join(result_path, image_file), nrow=8)
 
 
 def sample(epoch):
     print('sampling')
     fgen.eval()
-    n = 64
+    n = 256
     taus = [0.7, 0.8, 0.9, 1.0]
     for t in taus:
         z = torch.randn(n, 3, imageSize, imageSize).to(device)
@@ -236,7 +236,7 @@ def sample(epoch):
         img, _ = fgen.decode(z)
         img = postprocess(img, n_bits)
         image_file = 'sample{}.t{:.1f}.png'.format(epoch, t)
-        save_image(img, os.path.join(result_path, image_file), nrow=8)
+        save_image(img, os.path.join(result_path, image_file), nrow=16)
 
 
 print(args)
