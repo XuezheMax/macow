@@ -119,7 +119,7 @@ def train(epoch, k):
             # [batch, k] -> [1]
             log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
             # [batch, k, channels, H, W] -> [batch, channels, H, W]
-            data = preprocess(data, n_bits, noise)[:, 0]
+            data = preprocess(data, n_bits, noise[:, 0:1]).squeeze(1)
             log_probs = fgen.log_probability(data).sum()
             loss = (log_probs_posterior - log_probs) / batch_size
             loss.backward()
