@@ -30,6 +30,7 @@ parser.add_argument('--workers', default=4, type=int, metavar='N', help='number 
 parser.add_argument('--epochs', type=int, default=5000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
+parser.add_argument('--train_k', type=int, default=1, metavar='N', help='training K (default: 1)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
@@ -59,9 +60,8 @@ nc = 3
 nx = imageSize * imageSize * nc
 n_bits = args.n_bits
 n_bins = 2. ** n_bits
-dequant = args.dequant
 test_k = 5
-train_k = 1 if dequant == 'uniform' else 5
+train_k = args.train_k
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
@@ -251,6 +251,7 @@ lr = args.lr
 warmups = args.warmup_epochs
 step_decay = 0.999998
 grad_clip = args.grad_clip
+dequant = args.dequant
 
 if args.recover:
     params = json.load(open(os.path.join(model_path, 'config.json'), 'r'))
