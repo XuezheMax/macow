@@ -31,6 +31,7 @@ parser.add_argument('--workers', default=4, type=int, metavar='N', help='number 
 parser.add_argument('--epochs', type=int, default=5000, metavar='N', help='number of epochs to train')
 parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
+parser.add_argument('--train_k', type=int, default=1, metavar='N', help='training K (default: 1)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N', help='how many batches to wait before logging training status')
 parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization method', default='adam')
@@ -62,6 +63,7 @@ nx = imageSize * imageSize * nc
 n_bits = args.n_bits
 n_bins = 2. ** n_bits
 test_k = 5
+train_k = args.train_k
 
 model_path = args.model_path
 model_name = os.path.join(model_path, 'model.pt')
@@ -96,7 +98,7 @@ def get_optimizer(learning_rate, parameters):
         raise ValueError('unknown optimization method: %s' % opt)
 
 
-def train(epoch):
+def train(epoch, k):
     print('Epoch: %d (lr=%.6f (%s), patient=%d)' % (epoch, lr, opt, patient))
     fgen.train()
     nll = 0
@@ -114,11 +116,12 @@ def train(epoch):
         data_list = [data, ] if batch_steps == 1 else data.chunk(batch_steps, dim=0)
         for data in data_list:
             x = preprocess(data, n_bits)
-            # [batch, 1]
-            noise, log_probs_posterior = fgen.dequantize(x)
-            # [batch] -> [1]
+            # [batch, k]
+            noise, log_probs_posterior = fgen.dequantize(x, nsamples=k)
+            # [batch, k] -> [1]
             log_probs_posterior = log_probs_posterior.mean(dim=1).sum()
-            data = preprocess(data, n_bits, noise).squeeze(1)
+            # [batch, k, channels, H, W] -> [batch, channels, H, W]
+            data = preprocess(data, n_bits, noise[:, 0:1]).squeeze(1)
             log_probs = fgen.log_probability(data).sum()
             loss = (log_probs_posterior - log_probs) / batch_size
             loss.backward()
@@ -326,7 +329,7 @@ print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 for epoch in range(start_epoch, args.epochs + 1):
-    train(epoch)
+    train(epoch, train_k)
     print('-' * 100)
     with torch.no_grad():
         nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw = eval(test_loader, test_k)
