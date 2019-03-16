@@ -30,8 +30,7 @@ class Conv1x1Flow(Flow):
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
-                conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
@@ -47,8 +46,7 @@ class Conv1x1Flow(Flow):
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
-                conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
@@ -98,8 +96,7 @@ class Conv1x1WeightNormFlow(Flow):
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
-                conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
@@ -116,8 +113,7 @@ class Conv1x1WeightNormFlow(Flow):
         Args:
             input: Tensor
                 input tensor [batch, in_channels, H, W]
-            h: Tensor
-                conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
@@ -222,6 +218,7 @@ class MaskedConvFlow(Flow):
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
@@ -304,6 +301,7 @@ class MaskedConvFlow(Flow):
                 input tensor [batch, in_channels, H, W]
             s: Tensor
                 conditional input (default: None)
+
         Returns: out: Tensor , logdet: Tensor
             out: [batch, in_channels, H, W], the output of the flow
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
