@@ -233,7 +233,7 @@ class MaCowInternalBlock(Flow):
             layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
                                coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout) for _ in range(num_step)]
             self.layers.append(nn.ModuleList(layer))
-            prior = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=True, inverse=inverse, factor=factor)
+            prior = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, factor=factor)
             self.priors.append(prior)
             in_channels = in_channels - channel_step
             assert in_channels == prior.z1_channels

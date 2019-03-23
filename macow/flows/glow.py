@@ -104,7 +104,7 @@ class GlowInternalBlock(Flow):
         super(GlowInternalBlock, self).__init__(inverse)
         steps = [GlowStep(in_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
-        self.prior = NICE(in_channels, scale=True, inverse=inverse)
+        self.prior = NICE(in_channels, scale=scale, inverse=inverse)
 
     @overrides
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
