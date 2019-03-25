@@ -35,6 +35,7 @@ class GlowStep(Flow):
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
+    @overrides
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.coupling.backward(input, s=s)
 
