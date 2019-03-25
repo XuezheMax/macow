@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.flows.actnorm import ActNorm2dFlow
-from macow.flows.conv import MaskedConvFlow
+from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
 from macow.flows.glow import GlowStep
@@ -144,18 +144,27 @@ class Prior(Flow):
     def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2):
         super(Prior, self).__init__(inverse)
         self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
+        self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
         self.nice = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, factor=factor)
         self.z1_channels = self.nice.z1_channels
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.actnorm.forward(input)
+
+        out, logdet = self.conv1x1.forward(out)
+        logdet_accum = logdet_accum + logdet
+
         out, logdet = self.nice.forward(out, s=s)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
 
     def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.nice.backward(input, s=s)
+
+        out, logdet = self.conv1x1.backward(out)
+        logdet_accum = logdet_accum + logdet
+
         out, logdet = self.actnorm.backward(out)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
@@ -163,6 +172,10 @@ class Prior(Flow):
     @overrides
     def init(self, data, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.actnorm.init(data, init_scale=init_scale)
+
+        out, logdet = self.conv1x1.init(out, init_scale=init_scale)
+        logdet_accum = logdet_accum + logdet
+
         out, logdet = self.nice.init(out, s=s, init_scale=init_scale)
         logdet_accum = logdet_accum + logdet
         return out, logdet_accum
