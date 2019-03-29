@@ -1,0 +1,28 @@
+{
+  "flow": {
+    "type": "macow",
+    "levels": 6,
+    "num_steps": [4, [20, 20], [16, 16], [16, 16], [8, 8], 4],
+    "factors": [4, 4, 4, 4],
+    "in_channels": 3,
+    "kernel_size": [2, 5],
+    "scale": false,
+    "hidden_channels": [24, 256, 256, 256, 256, 512],
+    "bottom": true,
+    "coupling_type": "conv",
+    "inverse": true
+  },
+  "dequant": {
+    "levels": 3,
+    "num_steps": [2, [4], 4],
+    "factors": [2],
+    "in_channels": 3,
+    "kernel_size": [2, 3],
+    "scale": true,
+    "hidden_channels": [24, 256, 256],
+    "s_channels": 4,
+    "bottom": true
+  },
+  "ngpu": 2,
+  "gpu_ids": [1, 0]
+}
