@@ -26,7 +26,7 @@ parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--epochs', type=int, default=10000, metavar='N', help='number of epochs to train')
-parser.add_argument('--warmup_epochs', type=int, default=1, metavar='N', help='number of epochs to warm up (default: 1)')
+parser.add_argument('--warmup_epochs', type=int, default=200, metavar='N', help='number of epochs to warm up (default: 1)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
 parser.add_argument('--workers', default=1, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--seed', type=int, default=6700417, metavar='S', help='random seed (default: 6700417)')
@@ -148,8 +148,9 @@ def train(epoch, k):
             train_nll = nll / num_insts + train_nent + np.log(n_bins / 2.) * nx
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             nent_per_pixel = train_nent / (nx * np.log(2.0))
-            log_info = '[{}/{} ({:.0f}%) {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}'.format(
-                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), num_nans,
+            curr_lr = scheduler.get_lr()[0]
+            log_info = '[{}/{} ({:.0f}%) lr={:%.5f}, {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}'.format(
+                batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), curr_lr, num_nans,
                 train_nll, bits_per_pixel, train_nent, nent_per_pixel)
             sys.stdout.write(log_info)
             sys.stdout.flush()
@@ -303,7 +304,7 @@ else:
 
     fgen.to_device(device)
     optimizer = get_optimizer(lr, fgen.parameters())
-    lmbda = lambda step: min(1., step / (len(train_index) * float(warmups) / args.batch_size))
+    lmbda = lambda step: min(1., step / float(warmups))
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
     scheduler.step()
 
