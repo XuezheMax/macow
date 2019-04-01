@@ -362,12 +362,12 @@ for epoch in range(start_epoch, args.epochs + 1):
         best_nll_mc, best_nent, best_nll_iw, best_bpd_mc, best_nepd, best_bpd_iw, best_epoch))
     print('=' * 100)
 
-    if epoch == warmups:
+    if epoch == 1:
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
 
     lr = scheduler.get_lr()[0]
 
-    if epoch >= warmups:
+    if epoch >= 1:
         checkpoint = {'epoch': epoch + 1,
                       'model': fgen.state_dict(),
                       'optimizer': optimizer.state_dict(),
