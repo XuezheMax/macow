@@ -149,7 +149,7 @@ def train(epoch, k):
             bits_per_pixel = train_nll / (nx * np.log(2.0))
             nent_per_pixel = train_nent / (nx * np.log(2.0))
             curr_lr = scheduler.get_lr()[0]
-            log_info = '[{}/{} ({:.0f}%) lr={:.5f}, {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}'.format(
+            log_info = '[{}/{} ({:.0f}%) lr={:.6f}, {}] NLL: {:.2f}, BPD: {:.4f}, NENT: {:.2f}, NEPD: {:.4f}'.format(
                 batch_idx * batch_size, len(train_index), 100. * batch_idx * batch_size / len(train_index), curr_lr, num_nans,
                 train_nll, bits_per_pixel, train_nent, nent_per_pixel)
             sys.stdout.write(log_info)
@@ -359,6 +359,8 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('=' * 100)
 
     if epoch == 1:
+        for group in optimizer.param_groups:
+            del group['initial_lr']
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay)
 
     lr = scheduler.get_lr()[0]
