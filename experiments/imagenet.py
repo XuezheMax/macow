@@ -367,20 +367,19 @@ for epoch in range(start_epoch, args.epochs + 1):
 
     lr = scheduler.get_lr()[0]
 
-    if epoch >= 1:
-        checkpoint = {'epoch': epoch + 1,
-                      'model': fgen.state_dict(),
-                      'optimizer': optimizer.state_dict(),
-                      'scheduler': scheduler.state_dict(),
-                      'best_epoch': best_epoch,
-                      'best_nll_mc': best_nll_mc,
-                      'best_bpd_mc': best_bpd_mc,
-                      'best_nll_iw': best_nll_iw,
-                      'best_bpd_iw': best_bpd_iw,
-                      'best_nent': best_nent,
-                      'best_nepd': best_nepd,
-                      'patient': patient}
-        torch.save(checkpoint, checkpoint_name)
+    checkpoint = {'epoch': epoch + 1,
+                  'model': fgen.state_dict(),
+                  'optimizer': optimizer.state_dict(),
+                  'scheduler': scheduler.state_dict(),
+                  'best_epoch': best_epoch,
+                  'best_nll_mc': best_nll_mc,
+                  'best_bpd_mc': best_bpd_mc,
+                  'best_nll_iw': best_nll_iw,
+                  'best_bpd_iw': best_bpd_iw,
+                  'best_nent': best_nent,
+                  'best_nepd': best_nepd,
+                  'patient': patient}
+    torch.save(checkpoint, checkpoint_name)
 
     if lr < lr_min:
         break
