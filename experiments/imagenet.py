@@ -310,7 +310,7 @@ else:
 
     fgen.to_device(device)
     optimizer = get_optimizer(lr, fgen.parameters())
-    lmbda = lambda step: min(1., step / float(warmups))
+    lmbda = lambda step: step / float(warmups) if step < warmups else step_decay ** (step - warmups)
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lmbda)
     scheduler.step()
 
@@ -363,7 +363,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('=' * 100)
 
     if epoch == 1:
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay, last_epoch=0)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=step_decay)
 
     lr = scheduler.get_lr()[0]
 
