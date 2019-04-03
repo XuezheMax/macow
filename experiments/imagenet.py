@@ -28,7 +28,7 @@ parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='num
 parser.add_argument('--image-size', type=int, default=64, metavar='N', help='input image size(default: 64)')
 parser.add_argument('--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', type=int, default=5000, metavar='N', help='number of epochs to train')
-parser.add_argument('--warmup_epochs', type=int, default=200, metavar='N', help='number of epochs to warm up (default: 1)')
+parser.add_argument('--warmup_steps', type=int, default=200, metavar='N', help='number of steps to warm up (default: 200)')
 parser.add_argument('--seed', type=int, default=524287, metavar='S', help='random seed (default: 524287)')
 parser.add_argument('--train_k', type=int, default=1, metavar='N', help='training K (default: 1)')
 parser.add_argument('--n_bits', type=int, default=8, metavar='N', help='number of bits per pixel.')
@@ -250,7 +250,7 @@ opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
 lr = args.lr
-warmups = args.warmup_epochs
+warmups = args.warmup_steps
 step_decay = 0.999998
 grad_clip = args.grad_clip
 dequant = args.dequant

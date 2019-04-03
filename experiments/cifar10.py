@@ -26,7 +26,7 @@ parser.add_argument('--config', type=str, help='config file', required=True)
 parser.add_argument('--batch-size', type=int, default=512, metavar='N', help='input batch size for training (default: 512)')
 parser.add_argument('--batch-steps', type=int, default=1, metavar='N', help='number of steps for each batch (the batch size of each step is batch-size / steps (default: 1)')
 parser.add_argument('--epochs', type=int, default=10000, metavar='N', help='number of epochs to train')
-parser.add_argument('--warmup_epochs', type=int, default=200, metavar='N', help='number of epochs to warm up (default: 1)')
+parser.add_argument('--warmup_steps', type=int, default=200, metavar='N', help='number of steps to warm up (default: 200)')
 parser.add_argument('--valid_epochs', type=int, default=50, metavar='N', help='number of epochs to validate model (default: 50)')
 parser.add_argument('--workers', default=1, type=int, metavar='N', help='number of data loading workers (default: 8)')
 parser.add_argument('--seed', type=int, default=6700417, metavar='S', help='random seed (default: 6700417)')
@@ -247,7 +247,7 @@ opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
 lr = args.lr
-warmups = args.warmup_epochs
+warmups = args.warmup_steps
 step_decay = 0.999998
 grad_clip = args.grad_clip
 dequant = args.dequant
