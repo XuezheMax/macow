@@ -252,7 +252,7 @@ betas = (0.9, polyak_decay)
 eps = 1e-8
 lr = args.lr
 warmups = args.warmup_steps
-step_decay = 0.999998
+step_decay = 0.999997
 grad_clip = args.grad_clip
 dequant = args.dequant
 
