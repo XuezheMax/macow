@@ -105,6 +105,9 @@ class MaCowStep(Flow):
         self.glow_step = GlowStep(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse,
                                   coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout)
 
+    def sync(self):
+        self.glow_step.sync()
+
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         logdet_accum = input.new_zeros(input.size(0))
@@ -144,6 +147,10 @@ class MaCowBottomBlock(Flow):
         super(MaCowBottomBlock, self).__init__(inverse)
         steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
+
+    def sync(self):
+        for step in self.steps:
+            step.sync()
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -185,6 +192,10 @@ class MaCowTopBlock(Flow):
         steps = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
                            coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
+
+    def sync(self):
+        for step in self.steps:
+            step.sync()
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -238,6 +249,11 @@ class MaCowInternalBlock(Flow):
             assert in_channels == prior.z1_channels
             factor = factor - 1
         self.z1_channels = in_channels
+
+    def sync(self):
+        for layer in self.layers:
+            for step in layer:
+                step.sync()
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -348,6 +364,10 @@ class MaCow(Flow):
                 blocks.append(macow_block)
                 in_channels = macow_block.z1_channels
         self.blocks = nn.ModuleList(blocks)
+
+    def sync(self):
+        for block in self.blocks:
+            block.sync()
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:

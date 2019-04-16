@@ -31,6 +31,10 @@ class FlowGenModel(nn.Module):
             self.device = torch.device('cuda:{}'.format(gpu_id))
             self.flow = DataParallelFlow(self.flow, device_ids=device_ids, output_device=0)
 
+    def sync(self):
+        flow = self.flow.flow if isinstance(self.flow, DataParallelFlow) else self.flow
+        flow.sync()
+
     def to_device(self, device):
         if self.device is None:
             return self.to(device)
@@ -69,6 +73,7 @@ class FlowGenModel(nn.Module):
             logdet, the log determinant of :math:`\partial z / \partial x`
             Then the density :math:`\log(p(x)) = \log(p(z)) + logdet`
         """
+        self.sync()
         x, logdet = self.flow.fwdpass(z)
         return x, logdet
 

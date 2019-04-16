@@ -19,10 +19,15 @@ class Conv1x1Flow(Flow):
         super(Conv1x1Flow, self).__init__(inverse)
         self.in_channels = in_channels
         self.weight = Parameter(torch.Tensor(in_channels, in_channels))
+        self.register_buffer('weight_inv', self.weight.data.clone())
         self.reset_parameters()
 
     def reset_parameters(self):
         nn.init.orthogonal_(self.weight)
+        self.sync()
+
+    def sync(self):
+        self.weight_inv.copy_(self.weight.data.inverse())
 
     @overrides
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -52,9 +57,9 @@ class Conv1x1Flow(Flow):
             logdet: [batch], the log determinant of :math:`\partial output / \partial input`
         """
         batch, channels, H, W = input.size()
-        out = F.conv2d(input, self.weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
-        _, logdet = torch.slogdet(self.weight)
-        return out, logdet.mul(H * -W)
+        out = F.conv2d(input, self.weight_inv.view(self.in_channels, self.in_channels, 1, 1))
+        _, logdet = torch.slogdet(self.weight_inv)
+        return out, logdet.mul(H * W)
 
     @overrides
     def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -68,83 +73,6 @@ class Conv1x1Flow(Flow):
     @classmethod
     def from_params(cls, params: Dict) -> "Conv1x1Flow":
         return Conv1x1Flow(**params)
-
-
-class Conv1x1WeightNormFlow(Flow):
-    def __init__(self, in_channels, inverse=False):
-        super(Conv1x1WeightNormFlow, self).__init__(inverse)
-        self.in_channels = in_channels
-        self.weight_v = Parameter(torch.Tensor(in_channels, in_channels))
-        self.weight_g = Parameter(torch.Tensor(in_channels, 1))
-        self.bias = Parameter(torch.Tensor(in_channels))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.orthogonal_(self.weight_v)
-        _norm = norm(self.weight_v, 0).data + 1e-8
-        self.weight_g.data.copy_(_norm.log())
-        nn.init.constant_(self.bias, 0.)
-
-    def compute_weight(self) -> torch.Tensor:
-        _norm = norm(self.weight_v, 0) + 1e-8
-        weight = self.weight_v * (self.weight_g.exp() / _norm)
-        return weight
-
-    @overrides
-    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Args:
-            input: Tensor
-                input tensor [batch, in_channels, H, W]
-
-        Returns: out: Tensor , logdet: Tensor
-            out: [batch, in_channels, H, W], the output of the flow
-            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-        """
-        batch, channels, H, W = input.size()
-        weight = self.compute_weight()
-        out = F.conv2d(input, weight.view(self.in_channels, self.in_channels, 1, 1), self.bias)
-        _, logdet = torch.slogdet(weight)
-        return out, logdet.mul(H * W)
-
-    @overrides
-    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Args:
-            input: Tensor
-                input tensor [batch, in_channels, H, W]
-
-        Returns: out: Tensor , logdet: Tensor
-            out: [batch, in_channels, H, W], the output of the flow
-            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
-        """
-        batch, channels, H, W = input.size()
-        weight = self.compute_weight()
-        out = F.conv2d(input - self.bias.view(self.in_channels, 1, 1), weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
-        _, logdet = torch.slogdet(weight)
-        return out, logdet.mul(H * -W)
-
-    @overrides
-    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            # [batch, n_channels, H, W]
-            out, _ = self.forward(data)
-            out = out.transpose(0, 1).contiguous().view(self.in_channels, -1)
-            # [n_channels]
-            mean = out.mean(dim=1)
-            std = out.std(dim=1)
-            inv_stdv = init_scale / (std + 1e-6)
-            self.weight_g.add_(inv_stdv.log().unsqueeze(1))
-            self.bias.add_(-mean).mul_(inv_stdv)
-            return self.forward(data)
-
-    @overrides
-    def extra_repr(self):
-        return 'inverse={}, in_channels={}'.format(self.inverse, self.in_channels)
-
-    @classmethod
-    def from_params(cls, params: Dict) -> "Conv1x1WeightNormFlow":
-        return Conv1x1WeightNormFlow(**params)
 
 
 class MCFBlock(nn.Module):
@@ -341,5 +269,4 @@ class MaskedConvFlow(Flow):
 
 
 Conv1x1Flow.register('conv1x1')
-Conv1x1WeightNormFlow.register('conv1x1_weightnorm')
 MaskedConvFlow.register('masked_conv')

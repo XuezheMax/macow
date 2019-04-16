@@ -100,6 +100,9 @@ class GlowStep(Flow):
         self.coupling = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels,
                              scale=scale, inverse=inverse, type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout)
 
+    def sync(self):
+        self.conv1x1.sync()
+
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
         out, logdet_accum = self.actnorm.forward(input)
