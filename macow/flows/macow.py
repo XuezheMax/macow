@@ -7,10 +7,9 @@ import torch.nn as nn
 
 from macow.flows.flow import Flow
 from macow.flows.actnorm import ActNorm2dFlow
-from macow.flows.conv import MaskedConvFlow, Conv1x1Flow
-from macow.flows.nice import NICE
+from macow.flows.conv import MaskedConvFlow
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
-from macow.flows.glow import GlowStep
+from macow.flows.glow import GlowStep, Prior
 
 
 class MaCowUnit(Flow):
@@ -137,50 +136,6 @@ class MaCowStep(Flow):
         return out, logdet_accum
 
 
-class Prior(Flow):
-    """
-    prior for multi-scale architecture
-    """
-    def __init__(self, in_channels, hidden_channels=None, s_channels=None, scale=True, inverse=False, factor=2):
-        super(Prior, self).__init__(inverse)
-        self.actnorm = ActNorm2dFlow(in_channels, inverse=inverse)
-        self.conv1x1 = Conv1x1Flow(in_channels, inverse=inverse)
-        self.nice = NICE(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, factor=factor)
-        self.z1_channels = self.nice.z1_channels
-
-    @overrides
-    def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.actnorm.forward(input)
-
-        out, logdet = self.conv1x1.forward(out)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.nice.forward(out, s=s)
-        logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
-    def backward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.nice.backward(input, s=s)
-
-        out, logdet = self.conv1x1.backward(out)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.actnorm.backward(out)
-        logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
-    @overrides
-    def init(self, data, s=None, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
-        out, logdet_accum = self.actnorm.init(data, init_scale=init_scale)
-
-        out, logdet = self.conv1x1.init(out, init_scale=init_scale)
-        logdet_accum = logdet_accum + logdet
-
-        out, logdet = self.nice.init(out, s=s, init_scale=init_scale)
-        logdet_accum = logdet_accum + logdet
-        return out, logdet_accum
-
-
 class MaCowBottomBlock(Flow):
     """
     Masked Convolutional Flow Block (no squeeze nor split)
@@ -277,7 +232,7 @@ class MaCowInternalBlock(Flow):
             layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
                                coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout) for _ in range(num_step)]
             self.layers.append(nn.ModuleList(layer))
-            prior = Prior(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=scale, inverse=inverse, factor=factor)
+            prior = Prior(in_channels, inverse=inverse, factor=factor)
             self.priors.append(prior)
             in_channels = in_channels - channel_step
             assert in_channels == prior.z1_channels
@@ -294,7 +249,7 @@ class MaCowInternalBlock(Flow):
             for step in layer:
                 out, logdet = step.forward(out, s=s)
                 logdet_accum = logdet_accum + logdet
-            out, logdet = prior.forward(out, s=s)
+            out, logdet = prior.forward(out)
             logdet_accum = logdet_accum + logdet
             # split
             out1, out2 = split2d(out, prior.z1_channels)
@@ -320,7 +275,7 @@ class MaCowInternalBlock(Flow):
         for layer, prior in zip(reversed(self.layers), reversed(self.priors)):
             out2 = outputs.pop()
             out = unsplit2d([out, out2])
-            out, logdet = prior.backward(out, s=s)
+            out, logdet = prior.backward(out)
             logdet_accum = logdet_accum + logdet
             for step in reversed(layer):
                 out, logdet = step.backward(out, s=s)
@@ -339,7 +294,7 @@ class MaCowInternalBlock(Flow):
             for step in layer:
                 out, logdet = step.init(out, s=s, init_scale=init_scale)
                 logdet_accum = logdet_accum + logdet
-            out, logdet = prior.init(out, s=s, init_scale=init_scale)
+            out, logdet = prior.init(out, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
             # split
             out1, out2 = split2d(out, prior.z1_channels)

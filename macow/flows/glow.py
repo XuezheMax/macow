@@ -4,12 +4,88 @@ from overrides import overrides
 from typing import Dict, Tuple
 import torch
 import torch.nn as nn
+from torch.nn import Parameter
 
 from macow.flows.flow import Flow
 from macow.flows.actnorm import ActNorm2dFlow
 from macow.flows.conv import Conv1x1Flow
 from macow.flows.nice import NICE
 from macow.utils import squeeze2d, unsqueeze2d, split2d, unsplit2d
+
+
+class Prior(Flow):
+    """
+    prior for multi-scale architecture
+    """
+    def __init__(self, in_channels, inverse=False, factor=2):
+        super(Prior, self).__init__(inverse)
+        self.in_channels = in_channels
+        out_channels = in_channels // factor
+        in_channels = in_channels - out_channels
+        self.z1_channels = in_channels
+        self.log_scale = Parameter(torch.Tensor(out_channels, 1, 1))
+        self.bias = Parameter(torch.Tensor(out_channels, 1, 1))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.constant_(self.log_scale, 0.)
+        nn.init.constant_(self.bias, 0.)
+
+    @overrides
+    def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, in_channels, H, W]
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        z1 = input[:, :self.z1_channels]
+        z2 = input[:, self.z1_channels:]
+        H, W = input.size()[2:]
+        z2 = (z2 + self.bias) * self.log_scale.exp()
+        logdet = self.log_scale.sum(dim=0).squeeze(1).mul(H * W)
+        return torch.cat([z1, z2], dim=1), logdet
+
+    @overrides
+    def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            input: Tensor
+                input tensor [batch, in_channels, H, W]
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, in_channels, H, W], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        z1 = input[:, :self.z1_channels]
+        z2 = input[:, self.z1_channels:]
+        H, W = input.size()[2:]
+        z2 = z2.div(self.log_scale.exp() + 1e-8) - self.bias
+        logdet = self.log_scale.sum(dim=0).squeeze(1).mul(H * -W)
+        return torch.cat([z1, z2], dim=1), logdet
+
+    @overrides
+    def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+
+        Args:
+            data: input: Tensor
+                input tensor [batch, N1, N2, ..., in_channels]
+
+        Returns: out: Tensor , logdet: Tensor
+            out: [batch, N1, N2, ..., in_channels], the output of the flow
+            logdet: [batch], the log determinant of :math:`\partial output / \partial input`
+
+        """
+        with torch.no_grad():
+            return self.forward(data)
 
 
 class GlowStep(Flow):
@@ -105,7 +181,7 @@ class GlowInternalBlock(Flow):
         super(GlowInternalBlock, self).__init__(inverse)
         steps = [GlowStep(in_channels, scale=scale, inverse=inverse) for _ in range(num_steps)]
         self.steps = nn.ModuleList(steps)
-        self.prior = NICE(in_channels, scale=scale, inverse=inverse)
+        self.prior = Prior(in_channels, inverse=True)
 
     @overrides
     def forward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

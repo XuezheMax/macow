@@ -38,7 +38,7 @@ class Conv1x1Flow(Flow):
         batch, channels, H, W = input.size()
         out = F.conv2d(input, self.weight.view(self.in_channels, self.in_channels, 1, 1))
         _, logdet = torch.slogdet(self.weight)
-        return out, logdet * H * W
+        return out, logdet.mul(H * W)
 
     @overrides
     def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -54,7 +54,7 @@ class Conv1x1Flow(Flow):
         batch, channels, H, W = input.size()
         out = F.conv2d(input, self.weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
         _, logdet = torch.slogdet(self.weight)
-        return out, logdet * H * W * -1.0
+        return out, logdet.mul(H * -W)
 
     @overrides
     def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -105,7 +105,7 @@ class Conv1x1WeightNormFlow(Flow):
         weight = self.compute_weight()
         out = F.conv2d(input, weight.view(self.in_channels, self.in_channels, 1, 1), self.bias)
         _, logdet = torch.slogdet(weight)
-        return out, logdet * H * W
+        return out, logdet.mul(H * W)
 
     @overrides
     def backward(self, input: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -122,7 +122,7 @@ class Conv1x1WeightNormFlow(Flow):
         weight = self.compute_weight()
         out = F.conv2d(input - self.bias.view(self.in_channels, 1, 1), weight.inverse().view(self.in_channels, self.in_channels, 1, 1))
         _, logdet = torch.slogdet(weight)
-        return out, logdet * H * W * -1.0
+        return out, logdet.mul(H * -W)
 
     @overrides
     def init(self, data, init_scale=1.0) -> Tuple[torch.Tensor, torch.Tensor]:

@@ -122,7 +122,7 @@ class ActNorm2dFlow(Flow):
         """
         batch, channels, H, W = input.size()
         out = input * self.log_scale.exp() + self.bias
-        logdet = self.log_scale.sum(dim=0).squeeze(1) * H * W
+        logdet = self.log_scale.sum(dim=0).squeeze(1).mul(H * W)
         return out, logdet
 
     @overrides
@@ -141,7 +141,7 @@ class ActNorm2dFlow(Flow):
         batch, channels, H, W = input.size()
         out = input - self.bias
         out = out.div(self.log_scale.exp() + 1e-8)
-        logdet = self.log_scale.sum(dim=0).squeeze(1) * H * W * -1.0
+        logdet = self.log_scale.sum(dim=0).squeeze(1).mul(H * -W)
         return out, logdet
 
     @overrides
