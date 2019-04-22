@@ -320,11 +320,13 @@ else:
 
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
+fgen.sync()
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 checkpoint_epochs = 5
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch, train_k)
+    fgen.sync()
     print('-' * 100)
     if epoch < 11 or (epoch < 5000 and epoch % 10 == 0) or epoch % args.valid_epochs == 0:
         with torch.no_grad():

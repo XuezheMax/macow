@@ -73,7 +73,6 @@ class FlowGenModel(nn.Module):
             logdet, the log determinant of :math:`\partial z / \partial x`
             Then the density :math:`\log(p(x)) = \log(p(z)) + logdet`
         """
-        self.sync()
         x, logdet = self.flow.fwdpass(z)
         return x, logdet
 

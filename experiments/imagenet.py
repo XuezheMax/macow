@@ -326,10 +326,12 @@ else:
 
 # number of parameters
 print('# of Parameters: %d' % (sum([param.numel() for param in fgen.parameters()])))
+fgen.sync()
 lr_min = lr / 100
 lr = scheduler.get_lr()[0]
 for epoch in range(start_epoch, args.epochs + 1):
     train(epoch, train_k)
+    fgen.sync()
     print('-' * 100)
     with torch.no_grad():
         nll_mc, nent, nll_iw, bpd_mc, nepd, bpd_iw = eval(test_loader, test_k)
