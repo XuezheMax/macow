@@ -232,7 +232,7 @@ class MaCowInternalBlock(Flow):
     Masked Convolution Flow Internal Block (squeeze at beginning and split at end)
     """
     def __init__(self, num_steps, in_channels, kernel_size, hidden_channels, s_channels,
-                 factor=2, scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, pos_enc=True, dropout=0.0):
+                 factor=2, scale=True, prior_scale=True, inverse=False, coupling_type='conv', slice=None, heads=1, pos_enc=True, dropout=0.0):
         super(MaCowInternalBlock, self).__init__(inverse)
         num_layers = len(num_steps)
         assert num_layers < factor
@@ -243,17 +243,19 @@ class MaCowInternalBlock(Flow):
             layer = [MaCowStep(in_channels, kernel_size, hidden_channels, s_channels, scale=scale, inverse=inverse,
                                coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout) for _ in range(num_step)]
             self.layers.append(nn.ModuleList(layer))
-            prior = Prior(in_channels, inverse=inverse, factor=factor)
+            prior = Prior(in_channels, hidden_channels=hidden_channels, s_channels=s_channels, scale=prior_scale, inverse=inverse, factor=factor)
             self.priors.append(prior)
             in_channels = in_channels - channel_step
             assert in_channels == prior.z1_channels
             factor = factor - 1
         self.z1_channels = in_channels
+        assert len(self.layers) == len(self.priors)
 
     def sync(self):
-        for layer in self.layers:
+        for layer, prior in zip(self.layers, self.priors):
             for step in layer:
                 step.sync()
+            prior.sync()
 
     @overrides
     def forward(self, input: torch.Tensor, s=None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -265,7 +267,7 @@ class MaCowInternalBlock(Flow):
             for step in layer:
                 out, logdet = step.forward(out, s=s)
                 logdet_accum = logdet_accum + logdet
-            out, logdet = prior.forward(out)
+            out, logdet = prior.forward(out, s=s)
             logdet_accum = logdet_accum + logdet
             # split
             out1, out2 = split2d(out, prior.z1_channels)
@@ -291,7 +293,7 @@ class MaCowInternalBlock(Flow):
         for layer, prior in zip(reversed(self.layers), reversed(self.priors)):
             out2 = outputs.pop()
             out = unsplit2d([out, out2])
-            out, logdet = prior.backward(out)
+            out, logdet = prior.backward(out, s=s)
             logdet_accum = logdet_accum + logdet
             for step in reversed(layer):
                 out, logdet = step.backward(out, s=s)
@@ -310,7 +312,7 @@ class MaCowInternalBlock(Flow):
             for step in layer:
                 out, logdet = step.init(out, s=s, init_scale=init_scale)
                 logdet_accum = logdet_accum + logdet
-            out, logdet = prior.init(out, init_scale=init_scale)
+            out, logdet = prior.init(out, s=s, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
             # split
             out1, out2 = split2d(out, prior.z1_channels)
@@ -328,7 +330,7 @@ class MaCow(Flow):
     Masked Convolutional Flow
     """
     def __init__(self, levels, num_steps, in_channels, kernel_size, factors, hidden_channels, s_channels=0,
-                 scale=True, inverse=False, bottom=True, coupling_type='conv', slices=None, heads=1, pos_enc=True, dropout=0.0):
+                 scale=True, prior_scale=True, inverse=False, bottom=True, coupling_type='conv', slices=None, heads=1, pos_enc=True, dropout=0.0):
         super(MaCow, self).__init__(inverse)
         assert levels > 1, 'MaCow should have at least 2 levels.'
         assert len(kernel_size) == 2, 'kernel size should contain two numbers'
@@ -359,8 +361,8 @@ class MaCow(Flow):
                 in_channels = in_channels * 4
                 s_channels = s_channels * 4
                 macow_block = MaCowInternalBlock(num_steps[level], in_channels, kernel_size, h_channels, s_channels,
-                                                 factor=factors[level], scale=scale, inverse=inverse, coupling_type=coupling_type,
-                                                 slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout)
+                                                 factor=factors[level], scale=scale, prior_scale=prior_scale, inverse=inverse,
+                                                 coupling_type=coupling_type, slice=slice, heads=heads, pos_enc=pos_enc, dropout=dropout)
                 blocks.append(macow_block)
                 in_channels = macow_block.z1_channels
         self.blocks = nn.ModuleList(blocks)
