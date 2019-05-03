@@ -1,0 +1,19 @@
+# Library dependencies for the python code.  You need to install these with
+# `pip install -r requirements.txt` before you can run this.
+
+#### ESSENTIAL LIBRARIES FOR MAIN FUNCTIONALITY ####
+
+# This installs Pytorch for CUDA only. If you are using a newer version,
+# please visit http://pytorch.org/ and install the relevant version.
+torch>=1.0.1
+torchvision
+
+# Adds an @overrides decorator for better documentation and error checking when using subclasses.
+overrides
+
+# Used by images
+numpy
+scipy
+
+# Used by LSUN data set
+lmdb
