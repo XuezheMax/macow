@@ -233,7 +233,7 @@ def sample(epoch):
     print('sampling')
     fgen.eval()
     n = 256
-    taus = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    taus = [0.7, 0.8, 0.9, 1.0]
     for t in taus:
         z = torch.randn(n, 3, imageSize, imageSize).to(device)
         z = z * t
