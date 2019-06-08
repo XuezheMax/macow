@@ -12,6 +12,6 @@
     "coupling_type": "conv",
     "inverse": true
   },
-  "ngpu": 2,
-  "gpu_id": 1
+  "ngpu": 1,
+  "gpu_id": 0
 }

@@ -6,5 +6,5 @@
     "in_channels": 3,
     "inverse": true
   },
-  "ngpu": 4
+  "ngpu": 1
 }
