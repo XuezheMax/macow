@@ -3,7 +3,11 @@
 Code for reproducing results in the paper
 >[MaCow: Masked Convolutional Generative Flow](https://arxiv.org/abs/1902.04208)
 
+## CelebA-HQ and LSUN samples
 <img src="./docs/images/celeba_sample.png" width="600"/>
+<img src="./docs/images/bedroom_sample36.png" width="600"/>
+<img src="./docs/images/church_sample36.png" width="600"/>
+<img src="./docs/images/tower_sample36.png" width="600"/>
 
 ## Requirements
 The code was tested with `python 3.6`, `pytorch 0.4.1`, and `torchvision 0.2.1`.
