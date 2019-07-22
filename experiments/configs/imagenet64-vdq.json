@@ -13,13 +13,13 @@
     "inverse": true
   },
   "dequant": {
-    "levels": 4,
-    "num_steps": [4, [4], [4], 4],
-    "factors": [2, 2],
+    "levels": 3,
+    "num_steps": [6, [6], 4],
+    "factors": [2],
     "in_channels": 3,
     "kernel_size": [2, 3],
     "scale": true,
-    "hidden_channels": [24, 256, 256, 256],
+    "hidden_channels": [24, 256, 256],
     "s_channels": 4,
     "bottom": true
   },
