@@ -87,7 +87,7 @@ print(len(test_index))
 
 def get_optimizer(learning_rate, parameters):
     if opt == 'adam':
-        return optim.Adam(parameters, lr=learning_rate, betas=betas, eps=eps)
+        return optim.Adam(parameters, lr=learning_rate, betas=betas, eps=eps, amsgrad=True)
     elif opt == 'adamax':
         return optim.Adamax(parameters, lr=learning_rate, betas=betas, eps=eps)
     else:
