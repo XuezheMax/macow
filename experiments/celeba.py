@@ -37,6 +37,7 @@ parser.add_argument('--opt', choices=['adam', 'adamax'], help='optimization meth
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--polyak', type=float, default=0.999, help='Exponential decay rate of the sum of previous model iterates during Polyak averaging')
 parser.add_argument('--grad_clip', type=float, default=0, help='max norm for gradient clip (default 0: no clip')
+parser.add_argument('--amsgrad', action='store_true', help='AMS Grad')
 parser.add_argument('--dequant', choices=['uniform', 'variational'], help='dequantization method', default='uniform')
 parser.add_argument('--model_path', help='path for saving model file.', required=True)
 parser.add_argument('--data_path', help='path for data file.', default=None)
@@ -89,7 +90,7 @@ print(len(test_index))
 
 def get_optimizer(learning_rate, parameters):
     if opt == 'adam':
-        return optim.Adam(parameters, lr=learning_rate, betas=betas, eps=eps, amsgrad=True)
+        return optim.Adam(parameters, lr=learning_rate, betas=betas, eps=eps, amsgrad=amsgrad)
     elif opt == 'adamax':
         return optim.Adamax(parameters, lr=learning_rate, betas=betas, eps=eps)
     else:
@@ -248,6 +249,7 @@ polyak_decay = args.polyak
 opt = args.opt
 betas = (0.9, polyak_decay)
 eps = 1e-8
+amsgrad = args.amsgrad
 lr = args.lr
 warmups = args.warmup_steps
 step_decay = 0.999997
