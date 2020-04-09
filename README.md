@@ -1,8 +1,8 @@
 # MaCow: Masked Convolutional Generative Flow
 
 ## Updates
- - This package has stopped being updated. 
  - Please see our new resposity [Wolf](https://github.com/XuezheMax/wolf) for re-implementation of MaCow with distributed training supported.
+ - This package has stopped being updated. 
 
 Code for reproducing results in the paper
 >[MaCow: Masked Convolutional Generative Flow](https://arxiv.org/abs/1902.04208)
